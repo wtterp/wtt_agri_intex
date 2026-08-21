@@ -1,0 +1,22 @@
+<header class="topbar">
+  <div class="topbar-left">
+    {% if show_back %}
+    <a class="icon-btn back-btn" href="{{ back_href|default('/') }}" aria-label="Back">←</a>
+    {% endif %}
+    <img class="topbar-logo" src="{{ url_for('static', filename='images/logo.png') }}" alt="WTT logo">
+    <div class="topbar-title" data-i18n="{{ title_key }}">WTT Agri Intex</div>
+  </div>
+  <div class="topbar-actions">
+    <label class="language-switch" title="English / தமிழ்">
+      <input id="languageToggle" type="checkbox" aria-label="Toggle Tamil language">
+      <span class="switch-track"><span class="switch-thumb"></span></span>
+    </label>
+    <span id="languageLabel" class="language-label">EN</span>
+    {% if show_sync_icon %}
+      <a class="icon-btn" href="/sync-status" aria-label="Sync Status" title="Sync Status">↻</a>
+    {% endif %}
+    {% if show_refresh_icon %}
+      <button id="refreshButton" class="icon-btn" type="button" aria-label="Refresh" title="Refresh">↻</button>
+    {% endif %}
+  </div>
+</header>

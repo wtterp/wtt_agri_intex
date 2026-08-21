@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block body_class %}form-page{% endblock %}
+{% block app %}
+  {% set title_key='add_data_title' %}
+  {% set show_back=true %}
+  {% set back_href='/' %}
+  {% set show_sync_icon=false %}
+  {% set show_refresh_icon=false %}
+  {% include '_header.html' %}
+  <main class="page-content form-content">
+    <form id="agricultureForm" novalidate>
+      <section class="outlined-card scan-card" aria-labelledby="scanCardTitle">
+        <div class="scan-card-head">
+          <div>
+            <div id="scanCardTitle" class="scan-title" data-i18n="scan_card_title">SCAN VISITING CARD</div>
+            <div class="scan-subtitle" data-i18n="scan_card_subtitle">Capture or upload a visiting card to auto-fill Name, Mobile Number and District.</div>
+          </div>
+          <span class="scan-badge">AI</span>
+        </div>
+
+        <input id="visitingCardInput" class="visually-hidden" type="file" name="visiting_card" accept="image/jpeg,image/png,image/webp,image/*" capture="environment">
+        <button id="scanCardButton" class="scan-card-button" type="button">
+          <span class="scan-camera-icon" aria-hidden="true">📷</span>
+          <span>
+            <strong data-i18n="scan_card_button">Scan Visiting Card</strong>
+            <small data-i18n="scan_card_hint">Use camera or choose an image</small>
+          </span>
+        </button>
+
+        <div id="scanPreviewWrap" class="scan-preview-wrap hidden">
+          <img id="scanPreview" class="scan-preview" alt="Visiting card preview">
+          <div class="scan-preview-meta">
+            <div id="scanFileName" class="scan-file-name"></div>
+            <button id="scanAgainButton" class="scan-again-button" type="button" data-i18n="scan_again">Scan Again</button>
+          </div>
+        </div>
+
+        <div id="scanProgress" class="scan-progress hidden" role="status" aria-live="polite">
+          <span class="spinner spinner-green"></span>
+          <span data-i18n="scanning_card">Reading visiting card...</span>
+        </div>
+        <div id="scanResult" class="scan-result hidden" role="status" aria-live="polite"></div>
+      </section>
+
+      <div class="field-group">
+        <label for="name" data-i18n="name">NAME</label>
+        <div class="input-wrap"><span class="field-icon">👤</span><input id="name" name="name" type="text" data-i18n-placeholder="name_hint" placeholder="Enter your full name" autocomplete="name"></div>
+        <div class="error-text" data-error-for="name"></div>
+      </div>
+
+      <div class="field-group">
+        <label for="mobile_number" data-i18n="mobile_number">MOBILE NUMBER</label>
+        <div class="input-wrap"><span class="field-icon">📱</span><input id="mobile_number" name="mobile_number" type="tel" data-i18n-placeholder="mobile_hint" placeholder="Enter your mobile number" inputmode="tel" autocomplete="tel"></div>
+        <div class="error-text" data-error-for="mobile_number"></div>
+      </div>
+
+      <div class="field-group">
+        <label for="address" data-i18n="address">ADDRESS / DISTRICT</label>
+        <div class="input-wrap"><span class="field-icon">📍</span><input id="address" name="address" type="text" data-i18n-placeholder="address_hint" placeholder="Enter your address or district" autocomplete="street-address"></div>
+        <div class="error-text" data-error-for="address"></div>
+      </div>
+
+      <div class="field-group">
+        <label for="water_requirement" data-i18n="water_requirement">WATER REQUIREMENT PER DAY (IN LITERS)</label>
+        <div class="input-wrap"><span class="field-icon">💧</span><input id="water_requirement" name="water_requirement" type="number" step="any" data-i18n-placeholder="water_requirement_hint" placeholder="Enter water requirement in liters" inputmode="decimal"></div>
+        <div class="error-text" data-error-for="water_requirement"></div>
+      </div>
+
+      <div class="field-group">
+        <label for="water_source" data-i18n="water_source">SOURCE OF WATER</label>
+        <div class="input-wrap"><span class="field-icon">◉</span><input id="water_source" name="water_source" type="text" data-i18n-placeholder="water_source_hint" placeholder="e.g., Borewell, River, Canal, Rainwater"></div>
+        <div class="error-text" data-error-for="water_source"></div>
+      </div>
+
+      <div class="field-group">
+        <label for="crops" data-i18n="crops">CROPS</label>
+        <div class="input-wrap"><span class="field-icon">🌾</span><input id="crops" name="crops" type="text" data-i18n-placeholder="crops_hint" placeholder="Enter the crops you grow"></div>
+        <div class="error-text" data-error-for="crops"></div>
+      </div>
+
+      <div class="field-group">
+        <label for="acres_of_land" data-i18n="acres_of_land">ACRES OF LAND</label>
+        <div class="input-wrap"><span class="field-icon">🌱</span><input id="acres_of_land" name="acres_of_land" type="number" step="any" data-i18n-placeholder="acres_hint" placeholder="Enter land size in acres" inputmode="decimal"></div>
+        <div class="error-text" data-error-for="acres_of_land"></div>
+      </div>
+
+      <section class="outlined-card soil-card">
+        <label class="card-label" for="soil_type" data-i18n="soil_type">TYPE OF SOIL</label>
+        <select id="soil_type" name="soil_type"></select>
+        <div class="error-text" data-error-for="soil_type"></div>
+        <div id="otherSoilWrap" class="nested-field hidden">
+          <label for="other_soil_type" data-i18n="soil_other">Specify Soil Type</label>
+          <input id="other_soil_type" name="other_soil_type" type="text" data-i18n-placeholder="soil_other_hint" placeholder="Enter soil type">
+          <div class="error-text" data-error-for="other_soil_type"></div>
+        </div>
+      </section>
+
+      <div class="field-group">
+        <label for="water_parameters" data-i18n="water_parameters">WATER PARAMETERS</label>
+        <div class="input-wrap textarea-wrap"><span class="field-icon textarea-icon">⚗</span><textarea id="water_parameters" name="water_parameters" rows="3" data-i18n-placeholder="water_parameters_hint" placeholder="e.g., pH, TDS, Temperature, Hardness"></textarea></div>
+        <div class="error-text" data-error-for="water_parameters"></div>
+      </div>
+
+      <section class="outlined-card advance-card">
+        <label class="check-row" for="advance_received">
+          <input id="advance_received" name="advance_received" type="checkbox">
+          <span class="custom-check"></span>
+          <span id="advanceLabel" data-i18n="advance_received">Advance Received</span>
+        </label>
+        <div id="advanceAmountWrap" class="nested-field hidden">
+          <label for="advance_amount" data-i18n="advance_amount">Advance Amount (₹)</label>
+          <div class="input-wrap"><span class="field-icon">₹</span><input id="advance_amount" name="advance_amount" type="number" step="any" inputmode="decimal" data-i18n-placeholder="advance_amount_hint" placeholder="Enter advance amount in rupees"></div>
+          <div class="error-text" data-error-for="advance_amount"></div>
+        </div>
+      </section>
+
+      <button id="submitButton" class="btn btn-primary btn-submit" type="submit">
+        <span id="submitSpinner" class="spinner hidden"></span>
+        <span id="submitLabel" data-i18n="submit">SUBMIT</span>
+      </button>
+    </form>
+  </main>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/add-data.js') }}"></script>{% endblock %}

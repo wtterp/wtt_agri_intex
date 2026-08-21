@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block body_class %}sync-page{% endblock %}
+{% block app %}
+  {% set title_key='sync_status_title' %}
+  {% set show_back=true %}
+  {% set back_href='/' %}
+  {% set show_sync_icon=false %}
+  {% set show_refresh_icon=true %}
+  {% include '_header.html' %}
+
+  <main class="sync-main">
+    <section id="connectionBar" class="status-bar status-online">
+      <strong data-i18n="connection">Connection:</strong>
+      <span id="connectionText" data-i18n="online">🟢 Online</span>
+    </section>
+    <section class="status-bar status-sync">
+      <strong data-i18n="sync_status">Sync Status:</strong>
+      <span id="syncStatusText" data-i18n="all_synced">✅ All data synced</span>
+    </section>
+
+    <section id="syncBody" class="sync-body">
+      <div id="loadingState" class="center-state"><span class="spinner spinner-green"></span></div>
+      <div id="emptyState" class="center-state hidden">
+        <div class="success-icon">✓</div>
+        <h2 data-i18n="all_synced_message">All data is synced!</h2>
+        <p data-i18n="no_pending">No pending data in local storage</p>
+      </div>
+      <div id="pendingList" class="pending-list hidden"></div>
+    </section>
+
+    <footer id="syncFooter" class="sync-footer hidden">
+      <button id="syncNowButton" class="btn btn-primary btn-large" type="button">
+        <span id="syncButtonSpinner" class="spinner hidden"></span>
+        <span class="btn-icon">↻</span>
+        <span id="syncButtonText">Sync 0 Pending Items</span>
+      </button>
+    </footer>
+  </main>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/sync-status.js') }}"></script>{% endblock %}

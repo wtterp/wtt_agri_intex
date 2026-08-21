@@ -1,0 +1,11 @@
+{
+  "name": "WTT Agri Intex",
+  "short_name": "WTT Agri",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2e7d32",
+  "icons": [
+    {"src": "/static/images/logo.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any maskable"}
+  ]
+}
