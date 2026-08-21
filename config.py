@@ -23,7 +23,7 @@ class Config:
     }
     HOST = os.getenv("HOST", "0.0.0.0")
     PORT = int(os.getenv("PORT") or "5000")
-    REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "30"))
+    REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT") or "30")
 
     # ---------------------------------------------------------
     # VERCEL
@@ -65,10 +65,10 @@ class Config:
         or "gpt-5.6-luna"
     )
     OPENAI_REQUEST_TIMEOUT = int(
-        os.getenv("OPENAI_REQUEST_TIMEOUT", "45")
+        os.getenv("OPENAI_REQUEST_TIMEOUT") or "45"
     )
     OPENAI_MAX_IMAGE_MB = int(
-        os.getenv("OPENAI_MAX_IMAGE_MB", "10")
+        os.getenv("OPENAI_MAX_IMAGE_MB") or "10"
     )
     OPENAI_MAX_IMAGE_BYTES = OPENAI_MAX_IMAGE_MB * 1024 * 1024
 
