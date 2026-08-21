@@ -13,7 +13,7 @@ class Config:
     SECRET_KEY = os.getenv("FLASK_SECRET_KEY", "change-me")
     DEBUG = os.getenv("FLASK_DEBUG", "0").strip().lower() in {"1", "true", "yes", "on"}
     HOST = os.getenv("HOST", "0.0.0.0")
-    PORT = int(os.getenv("PORT", "5000"))
+    PORT = int(os.getenv("PORT") or "5000")
     REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "30"))
 
     # Visiting-card scanner (server-side only; never expose the API key to JavaScript).
