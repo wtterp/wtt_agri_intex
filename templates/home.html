@@ -1,21 +1,19 @@
 {% extends "base.html" %}
 {% block body_class %}home-page{% endblock %}
 {% block app %}
-  {% set title_key='app_title' %}
+  {% set page_title='WTT Exhibition Lead Tracker' %}
   {% set show_back=false %}
   {% set show_sync_icon=true %}
   {% set show_refresh_icon=false %}
   {% include '_header.html' %}
   <main class="home-main">
     <section class="home-content">
-      <div class="logo-orbit">
-        <img src="{{ url_for('static', filename='images/logo.png') }}" alt="WTT Agri Intex logo">
-      </div>
-      <h1 data-i18n="app_subtitle">Agricultural Data Collection</h1>
-      <p data-i18n="app_description">Submit your agricultural details for better water management</p>
+      <div class="logo-orbit"><img src="{{ url_for('static', filename='images/logo.png') }}" alt="WTT logo"></div>
+      <h1>Water & Wastewater Treatment</h1>
+      <p>Exhibition enquiry and lead capture for ETP, STP and WTP requirements.</p>
       <div class="home-actions">
-        <a class="btn btn-primary btn-large" href="/add"><span class="btn-icon">＋</span><span data-i18n="add_new_entry">Add New Entry</span></a>
-        <a class="btn btn-outline btn-large" href="/sync-status"><span class="btn-icon">↻</span><span data-i18n="view_sync_status">View Sync Status</span></a>
+        <a class="btn btn-primary btn-large" href="/add"><span class="btn-icon">＋</span><span>New Exhibition Enquiry</span></a>
+        <a class="btn btn-outline btn-large" href="/sync-status"><span class="btn-icon">↻</span><span>View Sync Status</span></a>
       </div>
     </section>
   </main>

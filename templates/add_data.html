@@ -1,123 +1,152 @@
 {% extends "base.html" %}
+{% block title %}New Exhibition Enquiry - WTT{% endblock %}
 {% block body_class %}form-page{% endblock %}
 {% block app %}
-  {% set title_key='add_data_title' %}
+  {% set page_title='Exhibition Enquiry Form' %}
   {% set show_back=true %}
   {% set back_href='/' %}
   {% set show_sync_icon=false %}
   {% set show_refresh_icon=false %}
   {% include '_header.html' %}
+
   <main class="page-content form-content">
-    <form id="agricultureForm" novalidate>
-      <section class="outlined-card scan-card" aria-labelledby="scanCardTitle">
-        <div class="scan-card-head">
-          <div>
-            <div id="scanCardTitle" class="scan-title" data-i18n="scan_card_title">SCAN VISITING CARD</div>
-            <div class="scan-subtitle" data-i18n="scan_card_subtitle">Capture or upload a visiting card to auto-fill Name, Mobile Number and District.</div>
+    <form id="leadForm" novalidate>
+      <div class="form-intro">
+        <h1>Water & Wastewater Treatment — Exhibition Enquiry</h1>
+        <p>Fields marked <strong>*</strong> are required. From Customer Requirement onward, all fields are optional. Conditional sections appear based on the selected treatment, requirement type and industry.</p>
+      </div>
+
+      <section class="form-section">
+        <div class="section-heading"><span>1</span><div><h2>Customer Details</h2><p>Capture the visiting card or enter the contact information.</p></div></div>
+        <div class="scan-card">
+          <div class="scan-card-head"><div><div class="scan-title">VISITING CARD</div><div class="scan-subtitle">Take a photo or attach a card. AI fills contact details; the card image is stored in Google Drive when the lead is submitted.</div></div><span class="scan-badge">AI</span></div>
+          <input id="visitingCardInput" class="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp,image/*" capture="environment">
+          <button id="scanCardButton" class="scan-card-button" type="button"><span class="scan-camera-icon">📷</span><span><strong>Take Photo / Attach Visiting Card</strong><small>Verify the extracted details before submitting</small></span></button>
+          <div id="scanPreviewWrap" class="scan-preview-wrap hidden"><img id="scanPreview" class="scan-preview" alt="Visiting card preview"><div class="scan-preview-meta"><div id="scanFileName" class="scan-file-name"></div><button id="scanAgainButton" class="scan-again-button" type="button">Scan Again</button></div></div>
+          <div id="scanProgress" class="scan-progress hidden"><span class="spinner spinner-green"></span><span>Reading visiting card...</span></div>
+          <div id="scanResult" class="scan-result hidden"></div>
+        </div>
+
+        <div class="field-grid">
+          <div class="field-group"><label for="company_name">Company Name *</label><input id="company_name" name="company_name" type="text" autocomplete="organization"><div class="error-text" data-error-for="company_name"></div></div>
+          <div class="field-group"><label for="contact_person">Contact Person *</label><input id="contact_person" name="contact_person" type="text" autocomplete="name"><div class="error-text" data-error-for="contact_person"></div></div>
+          <div class="field-group"><label for="designation">Designation</label><input id="designation" name="designation" type="text"></div>
+          <div class="field-group"><label for="mobile_number">Mobile No.</label><input id="mobile_number" name="mobile_number" type="tel" inputmode="tel" autocomplete="tel"><div class="error-text" data-error-for="mobile_number"></div></div>
+          <div class="field-group"><label for="email">Email</label><input id="email" name="email" type="email" autocomplete="email"><div class="error-text" data-error-for="email"></div></div>
+          <div class="field-group full"><small class="field-note"><strong>* Enter at least one contact method: Mobile No. or Email.</strong></small></div>
+          <div class="field-group"><label for="plant_project_location">Plant / Project Location</label><input id="plant_project_location" name="plant_project_location" type="text" placeholder="Actual treatment-plant location"></div>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <div class="section-heading"><span>2</span><div><h2>Treatment Requirement</h2></div></div>
+        <div class="field-grid">
+          <div class="field-group"><label for="treatment_required">What treatment is required? *</label><select id="treatment_required" name="treatment_required"><option value="">Select</option><option>ETP</option><option>STP</option><option>WTP</option></select><div class="error-text" data-error-for="treatment_required"></div></div>
+          <div class="field-group"><label for="requirement_type">Requirement Type *</label><select id="requirement_type" name="requirement_type"><option value="">Select</option><option>New Plant</option><option>Existing Plant Upgrade / Modification</option><option>Capacity Expansion</option><option>Replacement of Existing Plant</option></select><div class="error-text" data-error-for="requirement_type"></div></div>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <div class="section-heading"><span>3</span><div><h2>Industry / Application</h2></div></div>
+        <div class="field-grid">
+          <div class="field-group full"><label id="industryApplicationLabel" for="industry_application">Select treatment first *</label><select id="industry_application" name="industry_application" disabled><option value="">Select treatment first</option></select><div class="error-text" data-error-for="industry_application"></div></div>
+          <div id="otherIndustryWrap" class="field-group full hidden"><label for="other_industry_application">Other Industry / Application *</label><input id="other_industry_application" name="other_industry_application" type="text"><div class="error-text" data-error-for="other_industry_application"></div></div>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <div class="section-heading"><span>4</span><div><h2>Customer Requirement</h2><p>Capture the key requirement or discussion. This field is optional.</p></div></div>
+        <div class="field-group"><label for="customer_requirement">Key Requirement / Discussion</label><textarea id="customer_requirement" name="customer_requirement" rows="5" placeholder="Example: Existing 300 KLD ETP. COD outlet issue. Expansion planned to 500 KLD. Requires upgrade proposal."></textarea><div class="error-text" data-error-for="customer_requirement"></div></div>
+      </section>
+
+      <section class="form-section">
+        <div class="section-heading"><span>5</span><div><h2>Process / Application</h2><p>Manufacturing process, sewage source or raw-water application.</p></div></div>
+        <div class="field-group"><textarea id="process_application" name="process_application" rows="3" placeholder="Describe the process / application"></textarea></div>
+      </section>
+
+      <section class="form-section">
+        <div class="section-heading"><span>6</span><div><h2>Capacity / Flow</h2></div></div>
+        <div class="field-grid">
+          <div class="field-group"><label for="required_capacity_kld">Required Capacity (KLD)</label><input id="required_capacity_kld" name="required_capacity_kld" type="number" step="any" inputmode="decimal"><div class="error-text" data-error-for="required_capacity_kld"></div></div>
+          <div id="averageFlowWrap" class="field-group treatment-etp hidden"><label for="average_flow_kld">Average Flow (KLD)</label><input id="average_flow_kld" name="average_flow_kld" type="number" step="any"></div>
+          <div id="peakFlowWrap" class="field-group treatment-etp hidden"><label for="peak_flow_kld">Peak Flow (KLD)</label><input id="peak_flow_kld" name="peak_flow_kld" type="number" step="any"></div>
+          <div id="populationWrap" class="field-group treatment-stp hidden"><label for="population_occupancy">Population / Occupancy</label><input id="population_occupancy" name="population_occupancy" type="number" step="1"></div>
+          <div id="peakRequirementWrap" class="field-group treatment-wtp hidden"><label for="peak_requirement_kld">Peak Requirement (KLD)</label><input id="peak_requirement_kld" name="peak_requirement_kld" type="number" step="any"></div>
+          <div id="productionCapacityWrap" class="field-group treatment-etp hidden"><label for="production_capacity">Production Capacity</label><input id="production_capacity" name="production_capacity" type="number" step="any"></div>
+          <div id="productionUnitWrap" class="field-group treatment-etp hidden"><label for="production_capacity_unit">Production Capacity Unit</label><select id="production_capacity_unit" name="production_capacity_unit"><option value="">Select</option><option>TPD</option><option>MTPD</option><option>KLD</option><option>Other</option></select></div>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <div class="section-heading"><span>7</span><div><h2>Water / Effluent Parameters</h2><p>Enter any available parameter and value. Keep this flexible.</p></div></div>
+        <div class="field-group"><label for="water_effluent_parameters">Available Parameters</label><textarea id="water_effluent_parameters" name="water_effluent_parameters" rows="4" placeholder="Example: pH 7.5 | BOD 600 mg/L | COD 1500 mg/L | TSS 300 mg/L | TDS 2500 mg/L"></textarea></div>
+        <div class="field-grid">
+          <div class="field-group"><label for="analysis_report_status">Analysis Report</label><select id="analysis_report_status" name="analysis_report_status"><option value="">Select</option><option>Customer has analysis report</option><option>Parameters to be shared later</option><option>Not available</option></select></div>
+          <div class="field-group"><label for="lab_report_file">Optional Lab Report / Attachment</label><input id="lab_report_file" name="lab_report_file" type="file"><small class="field-note">Any file type can be uploaded within the web size limit. The file is stored in Google Drive; the spreadsheet stores its Drive link, not the binary file.</small></div>
+        </div>
+      </section>
+
+      <section id="existingPlantSection" class="form-section hidden">
+        <div class="section-heading"><span>8</span><div><h2>Existing Plant</h2><p>This section opens automatically for upgrade, expansion or replacement requirements. It is hidden for New Plant.</p></div></div>
+        <div id="existingPlantDetails" class="conditional-panel">
+          <div class="field-grid">
+            <div class="field-group"><label for="existing_plant_capacity_kld">Existing Plant Capacity (KLD)</label><input id="existing_plant_capacity_kld" name="existing_plant_capacity_kld" type="number" step="any"></div>
+            <div class="field-group"><label for="existing_technology_process">Existing Technology / Process</label><input id="existing_technology_process" name="existing_technology_process" type="text"></div>
+            <div class="field-group"><label for="existing_plant_status">Current Status</label><select id="existing_plant_status" name="existing_plant_status"><option value="">Select</option><option>Running Properly</option><option>Partially Working</option><option>Not Working</option><option>Not Meeting Standards</option></select></div>
+            <div class="field-group"><label for="existing_main_problem">Main Requirement / Problem</label><select id="existing_main_problem" name="existing_main_problem"><option value="">Select</option><option>Capacity Increase</option><option>Outlet Quality Issue</option><option>Upgrade / Modification</option><option>Expansion</option><option>Plant Not Working</option><option>Other</option></select></div>
+            <div class="field-group full"><label for="existing_plant_remarks">Existing Plant Remarks</label><textarea id="existing_plant_remarks" name="existing_plant_remarks" rows="3"></textarea></div>
           </div>
-          <span class="scan-badge">AI</span>
-        </div>
-
-        <input id="visitingCardInput" class="visually-hidden" type="file" name="visiting_card" accept="image/jpeg,image/png,image/webp,image/*" capture="environment">
-        <button id="scanCardButton" class="scan-card-button" type="button">
-          <span class="scan-camera-icon" aria-hidden="true">📷</span>
-          <span>
-            <strong data-i18n="scan_card_button">Scan Visiting Card</strong>
-            <small data-i18n="scan_card_hint">Use camera or choose an image</small>
-          </span>
-        </button>
-
-        <div id="scanPreviewWrap" class="scan-preview-wrap hidden">
-          <img id="scanPreview" class="scan-preview" alt="Visiting card preview">
-          <div class="scan-preview-meta">
-            <div id="scanFileName" class="scan-file-name"></div>
-            <button id="scanAgainButton" class="scan-again-button" type="button" data-i18n="scan_again">Scan Again</button>
-          </div>
-        </div>
-
-        <div id="scanProgress" class="scan-progress hidden" role="status" aria-live="polite">
-          <span class="spinner spinner-green"></span>
-          <span data-i18n="scanning_card">Reading visiting card...</span>
-        </div>
-        <div id="scanResult" class="scan-result hidden" role="status" aria-live="polite"></div>
-      </section>
-
-      <div class="field-group">
-        <label for="name" data-i18n="name">NAME</label>
-        <div class="input-wrap"><span class="field-icon">👤</span><input id="name" name="name" type="text" data-i18n-placeholder="name_hint" placeholder="Enter your full name" autocomplete="name"></div>
-        <div class="error-text" data-error-for="name"></div>
-      </div>
-
-      <div class="field-group">
-        <label for="mobile_number" data-i18n="mobile_number">MOBILE NUMBER</label>
-        <div class="input-wrap"><span class="field-icon">📱</span><input id="mobile_number" name="mobile_number" type="tel" data-i18n-placeholder="mobile_hint" placeholder="Enter your mobile number" inputmode="tel" autocomplete="tel"></div>
-        <div class="error-text" data-error-for="mobile_number"></div>
-      </div>
-
-      <div class="field-group">
-        <label for="address" data-i18n="address">ADDRESS / DISTRICT</label>
-        <div class="input-wrap"><span class="field-icon">📍</span><input id="address" name="address" type="text" data-i18n-placeholder="address_hint" placeholder="Enter your address or district" autocomplete="street-address"></div>
-        <div class="error-text" data-error-for="address"></div>
-      </div>
-
-      <div class="field-group">
-        <label for="water_requirement" data-i18n="water_requirement">WATER REQUIREMENT PER DAY (IN LITERS)</label>
-        <div class="input-wrap"><span class="field-icon">💧</span><input id="water_requirement" name="water_requirement" type="number" step="any" data-i18n-placeholder="water_requirement_hint" placeholder="Enter water requirement in liters" inputmode="decimal"></div>
-        <div class="error-text" data-error-for="water_requirement"></div>
-      </div>
-
-      <div class="field-group">
-        <label for="water_source" data-i18n="water_source">SOURCE OF WATER</label>
-        <div class="input-wrap"><span class="field-icon">◉</span><input id="water_source" name="water_source" type="text" data-i18n-placeholder="water_source_hint" placeholder="e.g., Borewell, River, Canal, Rainwater"></div>
-        <div class="error-text" data-error-for="water_source"></div>
-      </div>
-
-      <div class="field-group">
-        <label for="crops" data-i18n="crops">CROPS</label>
-        <div class="input-wrap"><span class="field-icon">🌾</span><input id="crops" name="crops" type="text" data-i18n-placeholder="crops_hint" placeholder="Enter the crops you grow"></div>
-        <div class="error-text" data-error-for="crops"></div>
-      </div>
-
-      <div class="field-group">
-        <label for="acres_of_land" data-i18n="acres_of_land">ACRES OF LAND</label>
-        <div class="input-wrap"><span class="field-icon">🌱</span><input id="acres_of_land" name="acres_of_land" type="number" step="any" data-i18n-placeholder="acres_hint" placeholder="Enter land size in acres" inputmode="decimal"></div>
-        <div class="error-text" data-error-for="acres_of_land"></div>
-      </div>
-
-      <section class="outlined-card soil-card">
-        <label class="card-label" for="soil_type" data-i18n="soil_type">TYPE OF SOIL</label>
-        <select id="soil_type" name="soil_type"></select>
-        <div class="error-text" data-error-for="soil_type"></div>
-        <div id="otherSoilWrap" class="nested-field hidden">
-          <label for="other_soil_type" data-i18n="soil_other">Specify Soil Type</label>
-          <input id="other_soil_type" name="other_soil_type" type="text" data-i18n-placeholder="soil_other_hint" placeholder="Enter soil type">
-          <div class="error-text" data-error-for="other_soil_type"></div>
         </div>
       </section>
 
-      <div class="field-group">
-        <label for="water_parameters" data-i18n="water_parameters">WATER PARAMETERS</label>
-        <div class="input-wrap textarea-wrap"><span class="field-icon textarea-icon">⚗</span><textarea id="water_parameters" name="water_parameters" rows="3" data-i18n-placeholder="water_parameters_hint" placeholder="e.g., pH, TDS, Temperature, Hardness"></textarea></div>
-        <div class="error-text" data-error-for="water_parameters"></div>
-      </div>
+      <section class="form-section">
+        <div class="section-heading"><span>9</span><div><h2>Discharge / Treated Water Requirement</h2></div></div>
+        <div id="treatedDestinationOptions" class="check-grid"></div>
+      </section>
 
-      <section class="outlined-card advance-card">
-        <label class="check-row" for="advance_received">
-          <input id="advance_received" name="advance_received" type="checkbox">
-          <span class="custom-check"></span>
-          <span id="advanceLabel" data-i18n="advance_received">Advance Received</span>
-        </label>
-        <div id="advanceAmountWrap" class="nested-field hidden">
-          <label for="advance_amount" data-i18n="advance_amount">Advance Amount (₹)</label>
-          <div class="input-wrap"><span class="field-icon">₹</span><input id="advance_amount" name="advance_amount" type="number" step="any" inputmode="decimal" data-i18n-placeholder="advance_amount_hint" placeholder="Enter advance amount in rupees"></div>
-          <div class="error-text" data-error-for="advance_amount"></div>
+      <section class="form-section">
+        <div class="section-heading"><span>10</span><div><h2>Required Discharge / Outlet Quality</h2></div></div>
+        <div class="field-grid">
+          <div class="field-group"><label for="specific_outlet_requirement">Specific discharge / treated-water requirement?</label><select id="specific_outlet_requirement" name="specific_outlet_requirement"><option value="">Select</option><option>Yes</option><option>No</option><option>Not Sure</option></select></div>
+          <div class="field-group full"><label for="required_norms_outlet_quality">Required Norms / Outlet Quality</label><textarea id="required_norms_outlet_quality" name="required_norms_outlet_quality" rows="3" placeholder="Examples: TNPCB norms, CETP norms, BOD < 30, COD < 250, customer specification"></textarea></div>
         </div>
       </section>
 
-      <button id="submitButton" class="btn btn-primary btn-submit" type="submit">
-        <span id="submitSpinner" class="spinner hidden"></span>
-        <span id="submitLabel" data-i18n="submit">SUBMIT</span>
-      </button>
+      <section id="industrySpecificSection" class="form-section hidden">
+        <div class="section-heading"><span>11</span><div><h2>Industry-Specific Details</h2><p>Only the relevant 2–3 questions are shown.</p></div></div>
+        <div id="industrySpecificFields" class="field-grid"></div>
+      </section>
+
+      <section id="stpAdditionalSection" class="form-section hidden">
+        <div class="section-heading"><span>12</span><div><h2>STP – Additional Details</h2></div></div>
+        <div class="field-grid">
+          <div class="field-group full"><label for="stp_sewage_source">Sewage Source</label><input id="stp_sewage_source" name="stp_sewage_source" type="text"></div>
+          <div class="field-group"><label for="stp_population_occupancy">Population / Occupancy</label><input id="stp_population_occupancy" name="stp_population_occupancy" type="number"></div>
+          <div class="field-group"><label for="stp_required_capacity_kld">Required Capacity (KLD)</label><input id="stp_required_capacity_kld" name="stp_required_capacity_kld" type="number" step="any"></div>
+          <div class="field-group full"><label>Treated Water Use</label><div id="stpTreatedUseOptions" class="check-grid compact"></div></div>
+        </div>
+      </section>
+
+      <section id="wtpAdditionalSection" class="form-section hidden">
+        <div class="section-heading"><span>13</span><div><h2>WTP – Additional Details</h2></div></div>
+        <div class="field-grid">
+          <div class="field-group"><label for="wtp_raw_water_source">Raw Water Source</label><select id="wtp_raw_water_source" name="wtp_raw_water_source"><option value="">Select</option><option>Borewell</option><option>River</option><option>Lake</option><option>Municipal</option><option>Sea</option><option>Other</option></select></div>
+          <div class="field-group"><label for="wtp_required_capacity_kld">Required Capacity (KLD)</label><input id="wtp_required_capacity_kld" name="wtp_required_capacity_kld" type="number" step="any"></div>
+          <div class="field-group full"><label>Application</label><div id="wtpApplicationOptions" class="check-grid compact"></div></div>
+          <div class="field-group full"><label for="wtp_raw_water_parameters">Raw Water Parameters</label><textarea id="wtp_raw_water_parameters" name="wtp_raw_water_parameters" rows="3"></textarea></div>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <div class="section-heading"><span>14</span><div><h2>Project Details</h2></div></div>
+        <div class="field-grid">
+          <div class="field-group"><label for="project_stage">Project Stage</label><select id="project_stage" name="project_stage"><option value="">Select</option><option>Initial Enquiry</option><option>Requirement Finalized</option><option>RFQ</option><option>Tender</option><option>Budgetary Quote</option></select><div class="error-text" data-error-for="project_stage"></div></div>
+          <div class="field-group"><label for="expected_timeline">Expected Timeline</label><select id="expected_timeline" name="expected_timeline"><option value="">Select</option><option>Immediate</option><option>1–3 Months</option><option>3–6 Months</option><option>6–12 Months</option><option>Not Decided</option></select><div class="error-text" data-error-for="expected_timeline"></div></div>
+          <div class="field-group full"><label for="internal_remarks">Internal Remarks</label><textarea id="internal_remarks" name="internal_remarks" rows="4"></textarea></div>
+        </div>
+      </section>
+
+      <button id="submitButton" class="btn btn-primary btn-submit" type="submit"><span id="submitSpinner" class="spinner hidden"></span><span id="submitLabel">SUBMIT EXHIBITION LEAD</span></button>
     </form>
   </main>
 {% endblock %}

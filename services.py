@@ -1,27 +1,21 @@
 from __future__ import annotations
 
+import base64
 import http.client
 import json
-import logging
-import re
 import socket
 import ssl
-from urllib.parse import urlencode
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlparse
 
 import requests
+
 from config import Config
-from models import AgricultureData
-
-log = logging.getLogger(__name__)
-
-
+from models import ExhibitionLead
 
 
 class _FixedIPHTTPSConnection(http.client.HTTPSConnection):
-    """HTTPS connection that bypasses DNS while keeping TLS SNI/hostname."""
-
     def __init__(self, host: str, ip: str, timeout: int):
         super().__init__(host=host, port=443, timeout=timeout, context=ssl.create_default_context())
         self._fixed_ip = ip
@@ -34,11 +28,9 @@ class _FixedIPHTTPSConnection(http.client.HTTPSConnection):
 def _post_fixed_ip(host: str, ip: str, path: str, *, headers: dict[str, str], body: bytes) -> tuple[int, str]:
     conn = _FixedIPHTTPSConnection(host, ip, Config.REQUEST_TIMEOUT)
     try:
-        request_headers = {"Host": host, "Connection": "close", **headers}
-        conn.request("POST", path, body=body, headers=request_headers)
+        conn.request("POST", path, body=body, headers={"Host": host, "Connection": "close", **headers})
         response = conn.getresponse()
-        content = response.read().decode("utf-8", errors="replace")
-        return response.status, content
+        return response.status, response.read().decode("utf-8", errors="replace")
     finally:
         conn.close()
 
@@ -48,192 +40,143 @@ class ServiceResult:
     ok: bool
     status_code: int | None = None
     detail: str = ""
+    data: dict[str, Any] | None = None
 
 
-def send_to_google_sheets(data: AgricultureData) -> ServiceResult:
-    if not Config.GOOGLE_SCRIPT_ID:
-        return ServiceResult(False, detail="GOOGLE_SCRIPT_ID is not configured")
+def _script_url() -> str:
+    return Config.google_script_url()
 
-    body = json.dumps({"action": "append", "data": [data.to_google_json()]}).encode("utf-8")
-    path = f"/macros/s/{Config.GOOGLE_SCRIPT_ID}/exec"
+
+def _post_script(payload: dict[str, Any], *, timeout: int | None = None) -> ServiceResult:
+    url = _script_url()
+    if not url:
+        return ServiceResult(
+            False,
+            detail="Google Sheet is not configured. Set EXHIBITION_GOOGLE_SCRIPT_URL or EXHIBITION_GOOGLE_SCRIPT_ID.",
+        )
+
+    request_timeout = timeout or Config.REQUEST_TIMEOUT
     errors: list[str] = []
 
-    # First preserve the Flutter DNS-bypass behavior, but keep the correct TLS
-    # SNI hostname while physically connecting to the configured Google IP.
-    if Config.GOOGLE_SCRIPT_IP:
-        try:
-            status, _ = _post_fixed_ip(
-                Config.GOOGLE_SCRIPT_HOST,
-                Config.GOOGLE_SCRIPT_IP,
-                path,
-                headers={"Content-Type": "application/json", "Content-Length": str(len(body))},
-                body=body,
-            )
-            if status in {200, 302}:
-                return ServiceResult(True, status, "Google Sheets accepted the submission")
-            errors.append(f"IP/SNI HTTP {status}")
-        except (OSError, ssl.SSLError, http.client.HTTPException) as exc:
-            errors.append(f"IP/SNI: {exc}")
-
-    try:
-        response = requests.post(
-            f"https://{Config.GOOGLE_SCRIPT_HOST}{path}",
-            headers={"Content-Type": "application/json"},
-            data=body,
-            timeout=Config.REQUEST_TIMEOUT,
-            allow_redirects=False,
-        )
-        if response.status_code in {200, 302}:
-            return ServiceResult(True, response.status_code, "Google Sheets accepted the submission")
-        errors.append(f"Domain HTTP {response.status_code}")
-    except requests.RequestException as exc:
-        errors.append(f"Domain: {exc}")
-
-    return ServiceResult(False, detail="; ".join(errors) or "Google Sheets request failed")
-
-
-def send_to_frappe(data: AgricultureData) -> ServiceResult:
-    url = f"{Config.FRAPPE_BASE_URL}{Config.FRAPPE_ENDPOINT}"
+    # Normal domain route. Apps Script often redirects from script.google.com
+    # to googleusercontent.com; redirects must be followed to obtain JSON.
     try:
         response = requests.post(
             url,
-            headers={"Content-Type": "application/json"},
-            json=data.to_frappe_payload(),
-            timeout=Config.REQUEST_TIMEOUT,
+            json=payload,
+            timeout=request_timeout,
+            allow_redirects=True,
         )
-        if response.status_code != 200:
-            return ServiceResult(False, response.status_code, f"ERP HTTP {response.status_code}")
-
         try:
-            payload: dict[str, Any] = response.json()
+            body = response.json()
         except ValueError:
-            return ServiceResult(False, response.status_code, "ERP returned non-JSON response")
-
-        message = payload.get("message")
-        if isinstance(message, dict) and message.get("status") == "success":
-            return ServiceResult(True, response.status_code, str(message.get("message", "ERP success")))
-        return ServiceResult(False, response.status_code, f"ERP response: {message}")
-    except requests.RequestException as exc:
-        return ServiceResult(False, detail=str(exc))
-
-
-def _clean_india_phone(value: str) -> str:
-    cleaned = re.sub(r"[^0-9]", "", value or "")
-    if cleaned and not cleaned.startswith("91"):
-        cleaned = f"91{cleaned}"
-    return cleaned
-
-
-def _ultramsg_request(to: str, body: str) -> ServiceResult:
-    if not Config.ULTRAMSG_TOKEN or not Config.ULTRAMSG_INSTANCE_ID:
-        return ServiceResult(False, detail="UltraMsg is not configured")
-
-    number = _clean_india_phone(to)
-    if not number:
-        return ServiceResult(False, detail="Invalid phone number")
-
-    form = {
-        "token": Config.ULTRAMSG_TOKEN,
-        "to": number,
-        "body": body,
-        "priority": "10",
-    }
-    encoded = urlencode(form).encode("utf-8")
-    path = f"/instance{Config.ULTRAMSG_INSTANCE_ID}/messages/chat"
-    errors: list[str] = []
-
-    try:
-        response = requests.post(
-            f"https://{Config.ULTRAMSG_HOST}{path}",
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            data=encoded,
-            timeout=Config.REQUEST_TIMEOUT,
-        )
-        if response.status_code == 200:
-            try:
-                payload = response.json()
-            except ValueError:
-                payload = {}
-            sent = payload.get("sent")
-            if sent is True or str(sent).lower() == "true":
-                return ServiceResult(True, response.status_code, "WhatsApp sent")
-            errors.append(str(payload.get("message", "UltraMsg did not confirm sent=true")))
+            body = None
+        if response.ok and isinstance(body, dict):
+            if body.get("success") is True:
+                return ServiceResult(True, response.status_code, str(body.get("message") or "OK"), body)
+            return ServiceResult(False, response.status_code, str(body.get("error") or "Apps Script rejected request"), body)
+        if response.ok:
+            errors.append(f"Apps Script returned non-JSON response: {response.text[:160]}")
         else:
-            errors.append(f"Domain HTTP {response.status_code}")
+            errors.append(f"HTTP {response.status_code}: {response.text[:160]}")
     except requests.RequestException as exc:
         errors.append(f"Domain: {exc}")
 
-    # Match the Flutter fallback: connect to a known IP while sending TLS SNI
-    # and Host for api.ultramsg.com.
-    if Config.ULTRAMSG_IP:
+    # Optional fixed-IP fallback retained from the original application.
+    parsed = urlparse(url)
+    if Config.EXHIBITION_GOOGLE_SCRIPT_IP and parsed.hostname == Config.EXHIBITION_GOOGLE_SCRIPT_HOST:
         try:
+            body_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
             status, content = _post_fixed_ip(
-                Config.ULTRAMSG_HOST,
-                Config.ULTRAMSG_IP,
-                path,
-                headers={
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "Content-Length": str(len(encoded)),
-                },
-                body=encoded,
+                parsed.hostname,
+                Config.EXHIBITION_GOOGLE_SCRIPT_IP,
+                parsed.path + (f"?{parsed.query}" if parsed.query else ""),
+                headers={"Content-Type": "application/json", "Content-Length": str(len(body_bytes))},
+                body=body_bytes,
             )
             if status == 200:
                 try:
-                    payload = json.loads(content)
+                    body = json.loads(content)
                 except ValueError:
-                    payload = {}
-                sent = payload.get("sent")
-                if sent is True or str(sent).lower() == "true":
-                    return ServiceResult(True, status, "WhatsApp sent")
-                errors.append(str(payload.get("message", "UltraMsg IP fallback did not confirm sent=true")))
+                    body = None
+                if isinstance(body, dict) and body.get("success") is True:
+                    return ServiceResult(True, status, str(body.get("message") or "OK"), body)
+                errors.append(str((body or {}).get("error") if isinstance(body, dict) else content[:160]))
+            elif status in {301, 302, 303, 307, 308}:
+                # A redirect means the Apps Script endpoint was reached. We do
+                # not call this a success because the JSON result/WhatsApp
+                # status cannot be verified on the fixed-IP path.
+                errors.append(f"IP/SNI redirect HTTP {status}; result could not be verified")
             else:
                 errors.append(f"IP/SNI HTTP {status}")
         except (OSError, ssl.SSLError, http.client.HTTPException) as exc:
             errors.append(f"IP/SNI: {exc}")
 
-    return ServiceResult(False, detail="; ".join(errors) or "WhatsApp request failed")
+    return ServiceResult(False, detail="; ".join(errors) or "Google Apps Script request failed")
 
 
-def build_confirmation_messages(data: AgricultureData) -> tuple[str, str]:
-    name = data.name or "Customer"
-    english = f"""✅ *Form Submitted Successfully!*
+def send_to_exhibition_sheet(data: ExhibitionLead) -> ServiceResult:
+    """Store/upsert one lead in Google Sheets.
 
-Dear {name},
-
-Thank you for visiting the WTT International stall at Agri Intex 2026. We appreciate your interest in our RO90 & RO70.
-
-We have received the following information:
-• 📱 Mobile: {data.mobile_number}
-• 🌾 Crops: {data.crops}
-• 💧 Water Requirement: {data.water_requirement} L/day
-• 🌍 Address: {data.address}
-
-Our team will review your details and get back to you soon.
-
-For further details, please feel free to contact us - 04214414454, +91 4214414454
-
-- WTT Agri Intex Team"""
-
-    tamil = f"""✅ *படிவம் வெற்றிகரமாக சமர்ப்பிக்கப்பட்டது!*
-
-அன்புள்ள {name},
-
-அக்ரி இன்டெக்ஸ் 2026 இல் WTT இன்டர்நேஷனல் அரங்கிற்கு வருகை தந்ததற்கு நன்றி. எங்களின் RO90 & RO70 பற்றிய உங்கள் ஆர்வத்தை நாங்கள் பாராட்டுகிறோம்.
-
-நாங்கள் பின்வரும் தகவல்களைப் பெற்றுள்ளோம்:
-• 📱 கைபேசி: {data.mobile_number}
-• 🌾 பயிர்கள்: {data.crops}
-• 💧 நீர் தேவை: {data.water_requirement} லிட்டர்/நாள்
-• 🌍 முகவரி: {data.address}
-
-எங்கள் குழு உங்கள் விவரங்களை மதிப்பாய்வு செய்து விரைவில் உங்களை தொடர்பு கொள்ளும்.
-
-மேலும் விவரங்களுக்கு, எங்களை தொடர்பு கொள்ளவும் - 04214414454, +91 4214414454
-
-- WTT அக்ரி இன்டெக்ஸ் குழு"""
-    return english, tamil
+    The Apps Script also performs duplicate protection and sends the customer
+    WhatsApp message (when a mobile number is available and UltraMsg is
+    configured in Apps Script Properties).
+    """
+    return _post_script(
+        {
+            "action": "submit_lead",
+            "data": data.to_google_json(),
+        },
+        timeout=max(Config.REQUEST_TIMEOUT, 45),
+    )
 
 
-def send_confirmation_whatsapp(data: AgricultureData) -> tuple[ServiceResult, ServiceResult]:
-    english, tamil = build_confirmation_messages(data)
-    return _ultramsg_request(data.mobile_number, english), _ultramsg_request(data.mobile_number, tamil)
+def upload_exhibition_file(
+    file_bytes: bytes,
+    filename: str,
+    mime_type: str,
+    *,
+    category: str,
+    submission_id: str = "",
+) -> tuple[ServiceResult, str]:
+    """Upload an attachment to Google Drive through the exhibition Apps Script.
+
+    The spreadsheet stores only the returned Drive URL; binary files are not
+    placed inside spreadsheet cells.
+    """
+    payload = {
+        "action": "upload_file",
+        "category": category,
+        "submission_id": submission_id,
+        "filename": filename,
+        "mime_type": mime_type or "application/octet-stream",
+        "base64": base64.b64encode(file_bytes).decode("ascii"),
+    }
+    result = _post_script(payload, timeout=max(Config.REQUEST_TIMEOUT, 75))
+    if not result.ok:
+        return result, ""
+    data = result.data or {}
+    url = str(data.get("url") or "")
+    if not url:
+        return ServiceResult(False, result.status_code, "Drive upload returned no URL", data), ""
+    return result, url
+
+
+def update_email_status(
+    submission_id: str,
+    *,
+    status: str,
+    detail: str = "",
+    sent_at: str = "",
+) -> ServiceResult:
+    """Write SMTP email delivery status back to the lead's spreadsheet row."""
+    return _post_script(
+        {
+            "action": "update_email_status",
+            "submission_id": submission_id,
+            "status": status,
+            "detail": detail,
+            "sent_at": sent_at,
+        },
+        timeout=max(Config.REQUEST_TIMEOUT, 45),
+    )

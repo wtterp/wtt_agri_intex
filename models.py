@@ -1,149 +1,149 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+import json
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
 
+# These labels become Google Sheet column headers. Keep them stable because
+# Google Apps Script uses "Submission ID", "Mobile No" and the WhatsApp
+# status columns for duplicate protection and automatic messaging.
+GOOGLE_LABELS: dict[str, str] = {
+    "client_submission_id": "Submission ID",
+    "created_at": "Created At",
+    "company_name": "Company Name",
+    "contact_person": "Contact Person",
+    "designation": "Designation",
+    "mobile_number": "Mobile No",
+    "email": "Email",
+    "plant_project_location": "Plant / Project Location",
+    "visiting_card_address": "Visiting Card Address",
+    "visiting_card_file_name": "Visiting Card File Name",
+    "visiting_card_url": "Visiting Card Drive URL",
+    "treatment_required": "Treatment Required",
+    "requirement_type": "Requirement Type",
+    "industry_application": "Industry / Application",
+    "other_industry_application": "Other Industry / Application",
+    "process_application": "Process / Application",
+    "required_capacity_kld": "Required Capacity (KLD)",
+    "average_flow_kld": "Average Flow (KLD)",
+    "peak_flow_kld": "Peak Flow (KLD)",
+    "peak_requirement_kld": "Peak Requirement (KLD)",
+    "population_occupancy": "Population / Occupancy",
+    "production_capacity": "Production Capacity",
+    "production_capacity_unit": "Production Capacity Unit",
+    "water_effluent_parameters": "Water / Effluent Parameters",
+    "analysis_report_status": "Analysis Report Status",
+    "lab_report_file_name": "Lab Report File Name",
+    "lab_report_url": "Lab Report Drive URL",
+    "existing_plant_capacity_kld": "Existing Plant Capacity (KLD)",
+    "existing_technology_process": "Existing Technology / Process",
+    "existing_plant_status": "Existing Plant Current Status",
+    "existing_main_problem": "Existing Plant Main Requirement / Problem",
+    "existing_plant_remarks": "Existing Plant Remarks",
+    "treated_water_destination": "Treated Water Destination / Use",
+    "specific_outlet_requirement": "Specific Outlet Requirement",
+    "required_norms_outlet_quality": "Required Norms / Outlet Quality",
+    "industry_specific_process": "Industry Specific Process / Product / Area",
+    "industry_specific_capacity": "Industry Specific Capacity",
+    "industry_specific_capacity_unit": "Industry Specific Capacity Unit",
+    "industry_specific_question": "Industry Specific Question",
+    "industry_specific_answer": "Industry Specific Answer",
+    "major_wastewater_source": "Major Wastewater Source",
+    "stp_sewage_source": "STP Sewage Source",
+    "stp_population_occupancy": "STP Population / Occupancy",
+    "stp_required_capacity_kld": "STP Required Capacity (KLD)",
+    "stp_treated_water_use": "STP Treated Water Use",
+    "wtp_raw_water_source": "WTP Raw Water Source",
+    "wtp_required_capacity_kld": "WTP Required Capacity (KLD)",
+    "wtp_application": "WTP Application",
+    "wtp_raw_water_parameters": "WTP Raw Water Parameters",
+    "customer_requirement": "Key Requirement / Discussion",
+    "project_stage": "Project Stage",
+    "expected_timeline": "Expected Timeline",
+    "internal_remarks": "Internal Remarks",
+}
+
+
+def _clean_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return value
+
+
 @dataclass(slots=True)
-class AgricultureData:
-    name: str
-    mobile_number: str
-    address: str
-    water_requirement: str
-    water_source: str
-    crops: str
-    acres_of_land: str
-    soil_type: str
-    water_parameters: str
-    other_soil_type: str | None = None
-    advance_received: bool = False
-    advance_amount: str | None = None
+class ExhibitionLead:
+    payload: dict[str, Any]
     google_synced: bool = False
-    erp_synced: bool = False
-    created_at: str | None = None
-    synced_at: str | None = None
     id: int | None = None
-    client_submission_id: str | None = None
-
-    def __post_init__(self) -> None:
-        if not self.created_at:
-            self.created_at = datetime.now().isoformat(timespec="seconds")
+    synced_at: str | None = None
 
     @classmethod
-    def from_request(cls, payload: dict[str, Any]) -> "AgricultureData":
-        def text(key: str) -> str:
-            value = payload.get(key, "")
-            return str(value).strip() if value is not None else ""
-
-        advance_received = payload.get("advance_received", False)
-        if isinstance(advance_received, str):
-            advance_received = advance_received.lower() in {"1", "true", "yes", "on"}
-
-        return cls(
-            name=text("name"),
-            mobile_number=text("mobile_number"),
-            address=text("address"),
-            water_requirement=text("water_requirement"),
-            water_source=text("water_source"),
-            crops=text("crops"),
-            acres_of_land=text("acres_of_land"),
-            soil_type=text("soil_type"),
-            other_soil_type=text("other_soil_type") or None,
-            water_parameters=text("water_parameters"),
-            advance_received=bool(advance_received),
-            advance_amount=text("advance_amount") or None,
-            client_submission_id=text("client_submission_id") or None,
-        )
+    def from_request(cls, payload: dict[str, Any]) -> "ExhibitionLead":
+        clean = {str(k): _clean_value(v) for k, v in payload.items()}
+        clean.setdefault("created_at", datetime.now().isoformat(timespec="seconds"))
+        return cls(payload=clean)
 
     @classmethod
-    def from_row(cls, row: Any) -> "AgricultureData":
+    def from_row(cls, row: Any) -> "ExhibitionLead":
         return cls(
-            id=row["id"],
-            client_submission_id=row["client_submission_id"],
-            name=row["name"],
-            mobile_number=row["mobile_number"],
-            address=row["address"],
-            water_requirement=row["water_requirement"],
-            water_source=row["water_source"],
-            crops=row["crops"],
-            acres_of_land=row["acres_of_land"],
-            soil_type=row["soil_type"],
-            other_soil_type=row["other_soil_type"],
-            water_parameters=row["water_parameters"],
-            advance_received=bool(row["advance_received"]),
-            advance_amount=row["advance_amount"],
+            id=int(row["id"]),
+            payload=json.loads(row["payload_json"]),
             google_synced=bool(row["google_synced"]),
-            erp_synced=bool(row["erp_synced"]),
-            created_at=row["created_at"],
             synced_at=row["synced_at"],
         )
 
-    def to_db_dict(self) -> dict[str, Any]:
-        data = asdict(self)
-        data["advance_received"] = int(self.advance_received)
-        data["google_synced"] = int(self.google_synced)
-        data["erp_synced"] = int(self.erp_synced)
-        data.pop("id", None)
-        return data
+    @property
+    def client_submission_id(self) -> str:
+        return str(self.payload.get("client_submission_id") or "")
+
+    @property
+    def company_name(self) -> str:
+        return str(self.payload.get("company_name") or "")
+
+    @property
+    def contact_person(self) -> str:
+        return str(self.payload.get("contact_person") or "")
+
+    @property
+    def mobile_number(self) -> str:
+        return str(self.payload.get("mobile_number") or "")
+
+    @property
+    def treatment_required(self) -> str:
+        return str(self.payload.get("treatment_required") or "")
+
+    def to_db_values(self) -> tuple[str, str, int, str | None]:
+        return (
+            self.client_submission_id,
+            json.dumps(self.payload, ensure_ascii=False, separators=(",", ":")),
+            int(self.google_synced),
+            self.synced_at,
+        )
 
     def to_google_json(self) -> dict[str, Any]:
-        return {
-            "Name": self.name,
-            "Mobile Number": self.mobile_number,
-            "Address/District": self.address,
-            "Water Requirement (Liters/Day)": self.water_requirement,
-            "Source of Water": self.water_source,
-            "Crops": self.crops,
-            "Acres of Land": self.acres_of_land,
-            "Type of Soil": self.other_soil_type if self.soil_type in {"Others", "மற்றவை"} and self.other_soil_type else self.soil_type,
-            "Water Parameters": self.water_parameters,
-            "Advance Received": "Yes" if self.advance_received else "No",
-            "Advance Amount": self.advance_amount or "",
-        }
-
-    def to_frappe_payload(self) -> dict[str, Any]:
-        try:
-            acres = float(self.acres_of_land)
-        except (TypeError, ValueError):
-            acres = 0
-        try:
-            advance = float(self.advance_amount or 0)
-        except (TypeError, ValueError):
-            advance = 0
-
-        return {
-            "customer_name": self.name,
-            "mobile_number": self.mobile_number,
-            "address": self.address,
-            "water_requirement": self.water_requirement,
-            "source_of_water": self.water_source,
-            "crops": self.crops,
-            "acres_of_land": acres,
-            "soil_type": self.soil_type,
-            "water_parameters": self.water_parameters,
-            "advance_received": 1 if self.advance_received else 0,
-            "advance_amount": advance,
-        }
+        row: dict[str, Any] = {}
+        for key, label in GOOGLE_LABELS.items():
+            value = self.payload.get(key, "")
+            if isinstance(value, list):
+                value = "; ".join(str(item) for item in value)
+            elif isinstance(value, bool):
+                value = "Yes" if value else "No"
+            row[label] = value
+        return row
 
     def to_public_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "client_submission_id": self.client_submission_id,
-            "name": self.name,
+            "company_name": self.company_name,
+            "contact_person": self.contact_person,
             "mobile_number": self.mobile_number,
-            "address": self.address,
-            "water_requirement": self.water_requirement,
-            "water_source": self.water_source,
-            "crops": self.crops,
-            "acres_of_land": self.acres_of_land,
-            "soil_type": self.soil_type,
-            "other_soil_type": self.other_soil_type,
-            "water_parameters": self.water_parameters,
-            "advance_received": self.advance_received,
-            "advance_amount": self.advance_amount,
+            "treatment_required": self.treatment_required,
             "google_synced": self.google_synced,
-            "erp_synced": self.erp_synced,
-            "created_at": self.created_at,
+            "created_at": self.payload.get("created_at", ""),
             "synced_at": self.synced_at,
         }

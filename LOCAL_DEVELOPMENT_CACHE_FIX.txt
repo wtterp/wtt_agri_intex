@@ -1,0 +1,28 @@
+LOCAL DEVELOPMENT CACHE FIX
+===========================
+
+This build intentionally DISABLES PWA/service-worker caching on:
+- http://127.0.0.1:5000
+- http://localhost:5000
+
+Vercel/production can still register the service worker.
+
+FIRST RUN AFTER REPLACING AN OLDER BUILD
+----------------------------------------
+1. Start Flask: python app.py
+2. Open http://127.0.0.1:5000/add
+3. Press Ctrl+F5 once.
+
+The new common.js/service-worker.js will unregister any old localhost service
+worker and delete old Cache Storage entries automatically.
+
+HOW TO VERIFY FLASK REALLY STOPS
+--------------------------------
+After Ctrl+C, run:
+  curl.exe -i http://127.0.0.1:5000/api/health
+
+Expected after Flask stops:
+  curl: (7) Failed to connect ...
+
+A browser TAB does not close when Flask stops. What matters is that a fresh
+network request fails after Flask is stopped.

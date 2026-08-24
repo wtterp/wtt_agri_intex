@@ -1,47 +1,30 @@
 (() => {
-  const byId=id=>document.getElementById(id); let busy=false;
-  function esc(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
-  function updateConnection() {
-    const online=navigator.onLine; byId('connectionText').textContent=window.WTT_I18N.t(online?'online':'offline');
-    byId('connectionBar').classList.toggle('status-online',online); byId('connectionBar').classList.toggle('status-offline',!online);
-  }
-  function browserItems() { return window.WTT_QUEUE ? window.WTT_QUEUE.load() : []; }
-  async function serverItems() {
-    if (!navigator.onLine) return [];
-    const r=await fetch('/api/pending',{cache:'no-store'}); if (!r.ok) throw new Error('Unable to load server pending data'); return (await r.json()).items || [];
-  }
+  const $ = id => document.getElementById(id); let busy=false;
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  function connection() { const online=navigator.onLine; $('connectionText').textContent=online?'🟢 Online':'🔴 Offline'; $('connectionBar').classList.toggle('status-online',online); $('connectionBar').classList.toggle('status-offline',!online); }
+  async function serverItems() { if (!navigator.onLine) return []; const r=await fetch('/api/pending',{cache:'no-store'}); if(!r.ok) throw new Error('Unable to load server queue'); return (await r.json()).items || []; }
   function card(item,index,kind) {
-    const date=item.created_at || item.browser_queued_at || 'N/A';
-    let flags=''; if (kind==='server') flags=`<div class="pending-flags">${esc(window.WTT_I18N.t('google_status'))}: ${item.google_synced?'✅':'⏳'} &nbsp; ${esc(window.WTT_I18N.t('erp_status'))}: ${item.erp_synced?'✅':'⏳'}</div>`;
-    return `<article class="pending-card"><div class="pending-index">${index}</div><div><div class="pending-name">${esc(item.name)}</div><div class="pending-meta">📱 ${esc(window.WTT_I18N.t('mobile_number'))}: ${esc(item.mobile_number)}<br>🌾 ${esc(window.WTT_I18N.t('crops'))}: ${esc(item.crops)}<br>📅 ${esc(String(date).replace('T',' ').split('.')[0])}</div>${flags}</div><div class="pending-icon">◷</div></article>`;
+    const date=item.created_at || item.browser_queued_at || '';
+    const company=item.company_name || item.contact_person || 'Exhibition Lead';
+    const treatment=item.treatment_required || '';
+    const status=kind==='server'?'<div class="pending-flags">Spreadsheet: ⏳</div>':'';
+    return `<article class="pending-card"><div class="pending-index">${index}</div><div><div class="pending-name">${esc(company)}</div><div class="pending-meta">👤 ${esc(item.contact_person||'')}<br>📱 ${esc(item.mobile_number||'')}<br>💧 ${esc(treatment)}<br>📅 ${esc(String(date).replace('T',' ').split('.')[0])}</div>${status}</div><div class="pending-icon">◷</div></article>`;
   }
-  async function load({autoSync=false}={}) {
-    byId('loadingState').classList.remove('hidden'); byId('emptyState').classList.add('hidden'); byId('pendingList').classList.add('hidden'); byId('syncFooter').classList.add('hidden'); updateConnection();
+  async function load() {
+    connection(); $('loadingState').classList.remove('hidden'); $('emptyState').classList.add('hidden'); $('pendingList').classList.add('hidden'); $('syncFooter').classList.add('hidden');
     try {
       if (navigator.onLine) await window.WTT_QUEUE.flush();
-      const browser=browserItems(); const server=await serverItems().catch(()=>[]); const total=browser.length+server.length;
-      byId('loadingState').classList.add('hidden');
-      if (!total) { byId('emptyState').classList.remove('hidden'); byId('syncStatusText').textContent=window.WTT_I18N.t('all_synced'); return; }
-      byId('syncStatusText').textContent=`${window.WTT_I18N.t('pending')}${total}${window.WTT_I18N.t('items')}`;
-      const parts=[]; let n=1;
-      if (browser.length) { parts.push(`<div class="queue-heading">${esc(window.WTT_I18N.t('browser_pending'))}</div>`); browser.forEach(x=>parts.push(card(x,n++,'browser'))); }
-      if (server.length) { parts.push(`<div class="queue-heading">${esc(window.WTT_I18N.t('server_pending'))}</div>`); server.forEach(x=>parts.push(card(x,n++,'server'))); }
-      byId('pendingList').innerHTML=parts.join(''); byId('pendingList').classList.remove('hidden'); byId('syncFooter').classList.remove('hidden');
-      byId('syncButtonText').textContent=`${window.WTT_I18N.t('sync_items')}${total}${window.WTT_I18N.t('pending_items')}`;
-      if (autoSync && navigator.onLine) await syncNow();
-    } catch (e) { byId('loadingState').classList.add('hidden'); showSnackbar(`${window.WTT_I18N.t('loading_error')}${e.message}`,'red'); }
+      const browser=window.WTT_QUEUE.load(); const server=await serverItems().catch(()=>[]); const total=browser.length+server.length;
+      $('loadingState').classList.add('hidden');
+      if(!total){$('emptyState').classList.remove('hidden');$('syncStatusText').textContent='✅ All leads synced';return;}
+      $('syncStatusText').textContent=`📤 Pending: ${total}`;
+      const html=[]; let n=1;
+      if(browser.length){html.push('<div class="queue-heading">Browser offline queue</div>');browser.forEach(x=>html.push(card(x,n++,'browser')));}
+      if(server.length){html.push('<div class="queue-heading">Server retry queue</div>');server.forEach(x=>html.push(card(x,n++,'server')));}
+      $('pendingList').innerHTML=html.join(''); $('pendingList').classList.remove('hidden'); $('syncFooter').classList.remove('hidden'); $('syncButtonText').textContent=`Sync ${total} Pending Lead${total===1?'':'s'}`;
+    } catch(e){$('loadingState').classList.add('hidden');showSnackbar(`Error loading sync status: ${e.message}`,'red');}
   }
-  function setBusy(v) { busy=v; byId('syncNowButton').disabled=v; byId('refreshButton').disabled=v; byId('syncButtonSpinner').classList.toggle('hidden',!v); }
-  async function syncNow() {
-    if (busy) return; if (!navigator.onLine) { showSnackbar(window.WTT_I18N.t('no_internet'),'orange'); return; }
-    setBusy(true); byId('syncStatusText').textContent=window.WTT_I18N.t('syncing');
-    try {
-      await window.WTT_QUEUE.flush();
-      const r=await fetch('/api/sync',{method:'POST'}); if (!r.ok) throw new Error('Sync request failed'); const result=await r.json(); if (!result.success) throw new Error(result.error || 'Sync failed');
-      showSnackbar(window.WTT_I18N.t('sync_success'),'green'); await load();
-    } catch (e) { byId('syncStatusText').textContent=window.WTT_I18N.t('sync_failed'); showSnackbar(window.WTT_I18N.t('sync_failed_message'),'red'); }
-    finally { setBusy(false); }
-  }
-  document.addEventListener('DOMContentLoaded',()=>{ byId('refreshButton').addEventListener('click',()=>load()); byId('syncNowButton').addEventListener('click',syncNow); load({autoSync:true}); });
-  document.addEventListener('languagechanged',()=>load()); window.addEventListener('online',()=>load({autoSync:true})); window.addEventListener('offline',updateConnection); window.addEventListener('wttqueuechanged',()=>load());
+  async function syncNow(){if(busy)return;if(!navigator.onLine){showSnackbar('No internet connection.','orange');return;}busy=true;$('syncNowButton').disabled=true;$('syncButtonSpinner').classList.remove('hidden');$('syncStatusText').textContent='🔄 Syncing...';try{await window.WTT_QUEUE.flush();const r=await fetch('/api/sync',{method:'POST'});const result=await r.json().catch(()=>({}));if(!r.ok||!result.success)throw new Error(result.error||'Sync failed');showSnackbar('✅ Sync completed.','green');await load();}catch(e){showSnackbar(`❌ ${e.message}`,'red');}finally{busy=false;$('syncNowButton').disabled=false;$('syncButtonSpinner').classList.add('hidden');}}
+  document.addEventListener('DOMContentLoaded',()=>{$('refreshButton').addEventListener('click',load);$('syncNowButton').addEventListener('click',syncNow);load();});
+  window.addEventListener('online',load); window.addEventListener('offline',connection); window.addEventListener('wttqueuechanged',load);
 })();

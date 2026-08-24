@@ -1,153 +1,485 @@
 (() => {
-  const byId = id => document.getElementById(id);
-
+  const $ = id => document.getElementById(id);
   let scanObjectUrl = null;
+  let visitingCardFile = null;
+  const makeSubmissionId = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+  let currentSubmissionId = makeSubmissionId();
+
+  const applications = {
+    ETP: ['Textile','Tannery','Food & Beverages','Paper & Pulp','Pharmaceutical','Automobile','Electronics & Semiconductor','Refinery','Plastic Recycling','Iron & Steel','Dairy','Power & Energy','Other'],
+    STP: ['Residential / Apartment','Hotel','Hospital','Commercial / Office','School / College','Industrial Township','Other'],
+    WTP: ['Process Water','Drinking / Potable Water','Boiler Feed','Cooling Tower','RO / DM / DI Feed','Utility Water','Other']
+  };
+
+  const applicationLabels = {
+    ETP: 'ETP Industry *', STP: 'STP Application *', WTP: 'WTP Application *'
+  };
+
+  const dischargeOptions = {
+    ETP: ['CETP','Sewer','Water Body','Land / Irrigation','Reuse in Plant','Gardening','Toilet Flushing','Other'],
+    STP: ['CETP','Sewer','Water Body','Land / Irrigation','Reuse in Plant','Gardening','Toilet Flushing','Other'],
+    WTP: ['Process','Drinking / Potable','Boiler','Cooling Tower','RO / DM / DI','Utility','Other']
+  };
+
+  const industryDetails = {
+    'Textile': {label:'Process', options:['Dyeing','Printing','Washing','Processing','Garment','Other'], unit:'TPD', question:'ZLD Required?'},
+    'Tannery': {label:'Process', options:['Tanning','Dyeing','Finishing','Complete Process'], unit:'TPD', question:'CETP Connection?'},
+    'Food & Beverages': {label:'Product / Process', text:true, unit:'TPD / KLD', question:'CIP / Cleaning Wastewater?'},
+    'Paper & Pulp': {label:'Process', options:['Pulp','Paper','Recycled Paper','Other'], unit:'TPD', question:'Water Reuse Required?'},
+    'Pharmaceutical': {label:'Process', options:['API','Formulation','Chemical Synthesis','Other'], unit:'TPD', question:'High TDS / High COD?'},
+    'Automobile': {label:'Process', options:['Painting','Pretreatment','Metal Finishing','Components','Other'], unit:'', question:'Oil / Metal Contamination?'},
+    'Electronics & Semiconductor': {label:'Process', options:['PCB','Semiconductor','Plating','Etching','Other'], unit:'', question:'Chemical / Heavy Metal Wastewater?'},
+    'Refinery': {label:'Process / Area', options:['Refining','Desalter','Cooling','Other'], unit:'', question:'Oil / Hydrocarbon in Effluent?'},
+    'Plastic Recycling': {label:'Process', options:['Washing','Recycling','Granulation','Other'], unit:'TPD', question:'Water Reuse Required?'},
+    'Iron & Steel': {label:'Process', options:['Pickling','Rolling','Galvanizing','Metal Finishing','Other'], unit:'TPD', question:'Heavy Metals / Oil Present?'},
+    'Dairy': {label:'Process / Product', options:['Milk','Cheese','Ice Cream','Other'], unit:'KLD', question:'CIP Wastewater?'},
+    'Power & Energy': {label:'Plant Type', options:['Thermal Power Generation','Other'], unit:'MW', wastewater:['Cooling Tower','Boiler','DM / RO','Other']}
+  };
+
+  function setError(field, message='') {
+    const input = $(field);
+    const holder = document.querySelector(`[data-error-for="${field}"]`);
+    if (input) input.classList.toggle('invalid', Boolean(message));
+    if (holder) holder.textContent = message;
+  }
+
+  function clearErrors() {
+    document.querySelectorAll('.error-text').forEach(el => el.textContent = '');
+    document.querySelectorAll('.invalid').forEach(el => el.classList.remove('invalid'));
+  }
+
+  function makeCheckboxes(container, name, options) {
+    if (!container) return;
+    container.innerHTML = options.map((option, i) => `
+      <label class="choice-chip" for="${name}_${i}">
+        <input id="${name}_${i}" type="checkbox" name="${name}" value="${escapeHtml(option)}">
+        <span>${escapeHtml(option)}</span>
+      </label>`).join('');
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function selectedValues(name) {
+    return [...document.querySelectorAll(`input[name="${name}"]:checked`)].map(el => el.value);
+  }
+
+  // Keep section numbers continuous even when conditional sections are hidden.
+  function renumberSections() {
+    let number = 1;
+    document.querySelectorAll('#leadForm > section.form-section').forEach(section => {
+      if (section.classList.contains('hidden')) return;
+      const badge = section.querySelector('.section-heading > span');
+      if (badge) badge.textContent = String(number++);
+    });
+  }
+
+  function updateTreatment() {
+    const treatment = $('treatment_required').value;
+    document.querySelectorAll('.treatment-etp').forEach(el => el.classList.toggle('hidden', treatment !== 'ETP'));
+    document.querySelectorAll('.treatment-stp').forEach(el => el.classList.toggle('hidden', treatment !== 'STP'));
+    document.querySelectorAll('.treatment-wtp').forEach(el => el.classList.toggle('hidden', treatment !== 'WTP'));
+    $('stpAdditionalSection').classList.toggle('hidden', treatment !== 'STP');
+    $('wtpAdditionalSection').classList.toggle('hidden', treatment !== 'WTP');
+
+    const select = $('industry_application');
+    select.innerHTML = '<option value="">Select</option>';
+    if (applications[treatment]) {
+      applications[treatment].forEach(value => select.add(new Option(value, value)));
+      select.disabled = false;
+      $('industryApplicationLabel').textContent = applicationLabels[treatment];
+    } else {
+      select.disabled = true;
+      select.innerHTML = '<option value="">Select treatment first</option>';
+      $('industryApplicationLabel').textContent = 'Select treatment first *';
+    }
+    $('otherIndustryWrap').classList.add('hidden');
+    $('other_industry_application').value = '';
+    renderIndustrySpecific();
+    makeCheckboxes($('treatedDestinationOptions'), 'treated_water_destination', dischargeOptions[treatment] || []);
+    renumberSections();
+  }
+
+  function updateIndustry() {
+    const industry = $('industry_application').value;
+    $('otherIndustryWrap').classList.toggle('hidden', industry !== 'Other');
+    if (industry !== 'Other') $('other_industry_application').value = '';
+    renderIndustrySpecific();
+    renumberSections();
+  }
+
+  function renderIndustrySpecific() {
+    const treatment = $('treatment_required').value;
+    const industry = $('industry_application').value;
+    const section = $('industrySpecificSection');
+    const target = $('industrySpecificFields');
+    target.innerHTML = '';
+    if (treatment !== 'ETP' || !industryDetails[industry]) {
+      section.classList.add('hidden');
+      renumberSections();
+      return;
+    }
+    section.classList.remove('hidden');
+    const def = industryDetails[industry];
+
+    let first = '';
+    if (def.text) {
+      first = `<div class="field-group full"><label for="industry_specific_process">${escapeHtml(def.label)}</label><input id="industry_specific_process" name="industry_specific_process" type="text"></div>`;
+    } else {
+      first = `<div class="field-group full"><label>${escapeHtml(def.label)}</label><div class="check-grid compact">${def.options.map((v,i)=>`<label class="choice-chip" for="industry_process_${i}"><input id="industry_process_${i}" type="checkbox" name="industry_specific_process_choice" value="${escapeHtml(v)}"><span>${escapeHtml(v)}</span></label>`).join('')}</div></div>`;
+    }
+
+    const capacity = `<div class="field-group"><label for="industry_specific_capacity">${industry === 'Refinery' ? 'Plant Capacity' : industry === 'Dairy' ? 'Milk Processing Capacity' : 'Production Capacity'}</label><input id="industry_specific_capacity" name="industry_specific_capacity" type="text" inputmode="decimal"></div><div class="field-group"><label for="industry_specific_capacity_unit">Unit</label><input id="industry_specific_capacity_unit" name="industry_specific_capacity_unit" type="text" value="${escapeHtml(def.unit || '')}" placeholder="Unit"></div>`;
+
+    let third = '';
+    if (def.question) {
+      third = `<div class="field-group full"><label for="industry_specific_answer">${escapeHtml(def.question)}</label><select id="industry_specific_answer" name="industry_specific_answer"><option value="">Select</option><option>Yes</option><option>No</option><option>Not Sure</option></select></div>`;
+    }
+    if (def.wastewater) {
+      third = `<div class="field-group full"><label>Major Wastewater Source</label><div class="check-grid compact">${def.wastewater.map((v,i)=>`<label class="choice-chip" for="wastewater_${i}"><input id="wastewater_${i}" type="checkbox" name="major_wastewater_source_choice" value="${escapeHtml(v)}"><span>${escapeHtml(v)}</span></label>`).join('')}</div></div>`;
+    }
+    target.innerHTML = first + capacity + third;
+    renumberSections();
+  }
+
+  // Existing Plant is controlled only by Requirement Type.
+  // No separate Yes/No question is shown.
+  function updateExistingPlant() {
+    const requirementType = $('requirement_type').value;
+    const showExistingPlant = Boolean(requirementType) && requirementType !== 'New Plant';
+    $('existingPlantSection').classList.toggle('hidden', !showExistingPlant);
+
+    if (!showExistingPlant) {
+      $('existingPlantDetails').querySelectorAll('input,select,textarea').forEach(el => {
+        if (el.type === 'checkbox' || el.type === 'radio') el.checked = false;
+        else el.value = '';
+      });
+    }
+    renumberSections();
+  }
+
+  function validate() {
+    clearErrors();
+    let ok = true;
+
+    // Only sections 1–3 contain mandatory user-entered fields.
+    const required = [
+      ['company_name','Please enter company name'],
+      ['contact_person','Please enter contact person'],
+      ['treatment_required','Please select treatment required'],
+      ['requirement_type','Please select requirement type'],
+      ['industry_application','Please select industry / application']
+    ];
+    required.forEach(([field,msg]) => {
+      const el = $(field);
+      if (!el || !String(el.value || '').trim()) {
+        setError(field,msg);
+        ok = false;
+      }
+    });
+
+    // Phone OR email: at least one must be supplied.
+    const mobileRaw = $('mobile_number').value.trim();
+    const mobile = mobileRaw.replace(/\D/g,'');
+    const email = $('email').value.trim();
+    if (!mobileRaw && !email) {
+      setError('mobile_number','Enter a mobile number or email address');
+      setError('email','Enter a mobile number or email address');
+      ok = false;
+    }
+    if (mobileRaw && mobile.length < 10) {
+      setError('mobile_number','Please enter a valid mobile number');
+      ok = false;
+    }
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      setError('email','Please enter a valid email address');
+      ok = false;
+    }
+
+    if ($('industry_application').value === 'Other' && !$('other_industry_application').value.trim()) {
+      setError('other_industry_application','Please specify the other industry / application');
+      ok = false;
+    }
+    return ok;
+  }
+
+  function getIndustryProcess() {
+    const direct = $('industry_specific_process');
+    if (direct) return direct.value.trim();
+    return selectedValues('industry_specific_process_choice');
+  }
+
+  function payload() {
+    const industry = $('industry_application').value;
+    const industryDef = industryDetails[industry] || {};
+    return {
+      client_submission_id: currentSubmissionId,
+      created_at: new Date().toISOString(),
+      company_name: $('company_name').value.trim(),
+      contact_person: $('contact_person').value.trim(),
+      designation: $('designation').value.trim(),
+      mobile_number: $('mobile_number').value.trim(),
+      email: $('email').value.trim(),
+      visiting_card_address: $('visiting_card_address')?.value || '',
+      visiting_card_file_name: visitingCardFile?.name || '',
+      visiting_card_url: '',
+      plant_project_location: $('plant_project_location').value.trim(),
+      treatment_required: $('treatment_required').value,
+      requirement_type: $('requirement_type').value,
+      industry_application: industry,
+      other_industry_application: $('other_industry_application').value.trim(),
+      customer_requirement: $('customer_requirement').value.trim(),
+      process_application: $('process_application').value.trim(),
+      required_capacity_kld: $('required_capacity_kld').value.trim(),
+      average_flow_kld: $('average_flow_kld').value.trim(),
+      peak_flow_kld: $('peak_flow_kld').value.trim(),
+      peak_requirement_kld: $('peak_requirement_kld').value.trim(),
+      population_occupancy: $('population_occupancy').value.trim(),
+      production_capacity: $('production_capacity').value.trim(),
+      production_capacity_unit: $('production_capacity_unit').value,
+      water_effluent_parameters: $('water_effluent_parameters').value.trim(),
+      analysis_report_status: $('analysis_report_status').value,
+      lab_report_file_name: $('lab_report_file').files?.[0]?.name || '',
+      lab_report_url: '',
+      existing_plant_capacity_kld: $('existing_plant_capacity_kld').value.trim(),
+      existing_technology_process: $('existing_technology_process').value.trim(),
+      existing_plant_status: $('existing_plant_status').value,
+      existing_main_problem: $('existing_main_problem').value,
+      existing_plant_remarks: $('existing_plant_remarks').value.trim(),
+      treated_water_destination: selectedValues('treated_water_destination'),
+      specific_outlet_requirement: $('specific_outlet_requirement').value,
+      required_norms_outlet_quality: $('required_norms_outlet_quality').value.trim(),
+      industry_specific_process: getIndustryProcess(),
+      industry_specific_capacity: $('industry_specific_capacity')?.value?.trim() || '',
+      industry_specific_capacity_unit: $('industry_specific_capacity_unit')?.value?.trim() || '',
+      industry_specific_question: industryDef.question || '',
+      industry_specific_answer: $('industry_specific_answer')?.value || '',
+      major_wastewater_source: selectedValues('major_wastewater_source_choice'),
+      stp_sewage_source: $('stp_sewage_source').value.trim(),
+      stp_population_occupancy: $('stp_population_occupancy').value.trim(),
+      stp_required_capacity_kld: $('stp_required_capacity_kld').value.trim(),
+      stp_treated_water_use: selectedValues('stp_treated_water_use'),
+      wtp_raw_water_source: $('wtp_raw_water_source').value,
+      wtp_required_capacity_kld: $('wtp_required_capacity_kld').value.trim(),
+      wtp_application: selectedValues('wtp_application_choice'),
+      wtp_raw_water_parameters: $('wtp_raw_water_parameters').value.trim(),
+      project_stage: $('project_stage').value,
+      expected_timeline: $('expected_timeline').value,
+      internal_remarks: $('internal_remarks').value.trim()
+    };
+  }
+
+  function setBusy(busy) {
+    $('submitButton').disabled = busy;
+    $('submitSpinner').classList.toggle('hidden', !busy);
+    $('submitLabel').classList.toggle('hidden', busy);
+  }
+
+  function resetForm() {
+    $('leadForm').reset();
+    if ($('visiting_card_address')) $('visiting_card_address').value = '';
+    visitingCardFile = null;
+    currentSubmissionId = makeSubmissionId();
+    updateTreatment();
+    updateExistingPlant();
+    clearErrors();
+    setScanResult('');
+    $('scanPreviewWrap').classList.add('hidden');
+    if (scanObjectUrl) {
+      URL.revokeObjectURL(scanObjectUrl);
+      scanObjectUrl = null;
+    }
+    renumberSections();
+    window.scrollTo({top:0, behavior:'smooth'});
+  }
+
+  async function uploadAttachment(file, category, submissionId) {
+    if (!file) return {url:'', filename:''};
+    const form = new FormData();
+    form.append('file', file, file.name || 'attachment');
+    form.append('category', category);
+    form.append('submission_id', submissionId || '');
+    const response = await fetch('/api/upload-exhibition-file', {method:'POST', body:form});
+    const result = await response.json().catch(()=>({}));
+    if (!response.ok || !result.success) throw new Error(result.error || `${category} upload failed`);
+    return result;
+  }
+
+  async function submitLead(event) {
+    event.preventDefault();
+    if (!validate()) {
+      showSnackbar('Please complete the required fields.','red');
+      return;
+    }
+    const data = payload();
+    const labReportFile = $('lab_report_file').files?.[0] || null;
+
+    // Binary attachments cannot be kept safely in localStorage. If a file is
+    // selected, require internet so it reaches Google Drive before the row is
+    // saved to the spreadsheet.
+    if (!navigator.onLine && (visitingCardFile || labReportFile)) {
+      showSnackbar('📎 Internet is required to upload the selected visiting card / report. Connect and submit again.', 'orange', 6000);
+      return;
+    }
+
+    setBusy(true);
+    try {
+      if (navigator.onLine && visitingCardFile) {
+        const uploaded = await uploadAttachment(visitingCardFile, 'Visiting Cards', data.client_submission_id);
+        data.visiting_card_file_name = uploaded.filename || visitingCardFile.name || '';
+        data.visiting_card_url = uploaded.url || '';
+      }
+
+      if (navigator.onLine && labReportFile) {
+        const uploaded = await uploadAttachment(labReportFile, 'Lab Reports', data.client_submission_id);
+        data.lab_report_file_name = uploaded.filename || labReportFile.name || '';
+        data.lab_report_url = uploaded.url || '';
+      }
+
+      if (!navigator.onLine) {
+        window.WTT_QUEUE.add(data);
+        showSnackbar('📴 Lead saved offline. It will sync to Google Sheets when internet is available.','blue');
+        resetForm();
+        return;
+      }
+
+      const response = await fetch('/api/submit', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(data)
+      });
+      const result = await response.json().catch(()=>({}));
+      if (!response.ok) throw new Error((result.errors || [result.error || response.statusText]).join(', '));
+
+      let message = '✅ Exhibition lead saved to Google Sheets.';
+      let kind = 'green';
+
+      if (data.mobile_number) {
+        if (result.whatsapp_sent) message += ' WhatsApp confirmation sent.';
+        else {
+          message += ` WhatsApp: ${result.whatsapp_status || 'not sent'}.`;
+          kind = 'orange';
+        }
+      } else {
+        message += ' WhatsApp skipped (no mobile).';
+      }
+
+      if (data.email) {
+        if (result.email_sent) message += ' Email confirmation sent.';
+        else {
+          message += ` Email: ${result.email_status || 'not sent'}.`;
+          kind = 'orange';
+        }
+      } else {
+        message += ' Email skipped (no email address).';
+      }
+
+      showSnackbar(message, kind, 8000);
+      resetForm();
+    } catch (error) {
+      // The API returns non-200 when Google Sheets did not actually accept the
+      // lead. Keep a browser copy so Vercel /tmp expiry cannot lose the data.
+      window.WTT_QUEUE.add(data);
+      showSnackbar(`⚠️ ${error.message || 'Could not sync now'}. Lead kept in browser queue for retry.`, 'orange', 6000);
+      // Keep attachments/form visible so the user can retry file upload rather
+      // than silently losing a selected attachment.
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function setScanBusy(busy) {
-    const button = byId('scanCardButton');
-    const again = byId('scanAgainButton');
-    if (button) button.disabled = busy;
-    if (again) again.disabled = busy;
-    byId('scanProgress')?.classList.toggle('hidden', !busy);
+    $('scanCardButton').disabled = busy;
+    $('scanAgainButton').disabled = busy;
+    $('scanProgress').classList.toggle('hidden', !busy);
   }
 
   function setScanResult(message, kind='success') {
-    const result = byId('scanResult');
-    if (!result) return;
-    result.textContent = message || '';
-    result.classList.toggle('hidden', !message);
-    result.classList.toggle('scan-result-success', kind === 'success');
-    result.classList.toggle('scan-result-warning', kind === 'warning');
-    result.classList.toggle('scan-result-error', kind === 'error');
-  }
-
-  function openCardPicker() {
-    if (byId('scanCardButton')?.disabled) return;
-    byId('visitingCardInput')?.click();
+    const el = $('scanResult');
+    el.textContent = message || '';
+    el.classList.toggle('hidden', !message);
+    el.classList.toggle('scan-result-success', kind === 'success');
+    el.classList.toggle('scan-result-warning', kind === 'warning');
+    el.classList.toggle('scan-result-error', kind === 'error');
   }
 
   function showCardPreview(file) {
     if (scanObjectUrl) URL.revokeObjectURL(scanObjectUrl);
     scanObjectUrl = URL.createObjectURL(file);
-    byId('scanPreview').src = scanObjectUrl;
-    byId('scanFileName').textContent = file.name || 'visiting-card.jpg';
-    byId('scanPreviewWrap').classList.remove('hidden');
+    $('scanPreview').src = scanObjectUrl;
+    $('scanFileName').textContent = file.name || 'visiting-card.jpg';
+    $('scanPreviewWrap').classList.remove('hidden');
   }
 
-  function fillFromVisitingCard(data) {
+  function fillCard(data) {
+    const map = {
+      company_name:'Company',
+      contact_person:'Contact Person',
+      designation:'Designation',
+      mobile_number:'Mobile',
+      email:'Email'
+    };
     const filled = [];
-    if (data.name) {
-      byId('name').value = data.name;
-      setError('name');
-      filled.push(window.WTT_I18N.t('name'));
-    }
-    if (data.mobile_number) {
-      byId('mobile_number').value = data.mobile_number;
-      setError('mobile_number');
-      filled.push(window.WTT_I18N.t('mobile_number'));
-    }
-    if (data.address) {
-      byId('address').value = data.address;
-      setError('address');
-      filled.push(window.WTT_I18N.t('address'));
-    }
+    Object.entries(map).forEach(([key,label]) => {
+      if (data[key] && $(key)) {
+        $(key).value = data[key];
+        setError(key);
+        filled.push(label);
+      }
+    });
+    if ($('visiting_card_address')) $('visiting_card_address').value = data.address || '';
     return filled;
   }
 
-  async function scanVisitingCard(file) {
+  async function scanCard(file) {
     if (!file) return;
-    setScanResult('');
+    visitingCardFile = file;
     showCardPreview(file);
+    setScanResult('');
     setScanBusy(true);
-
     try {
-      if (!navigator.onLine) {
-        throw new Error(window.WTT_I18N.t('scan_requires_internet'));
-      }
-
-      const formData = new FormData();
-      formData.append('card', file, file.name || 'visiting-card.jpg');
-      const response = await fetch('/api/scan-visiting-card', {
-        method: 'POST',
-        body: formData
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || window.WTT_I18N.t('scan_failed'));
-      }
-
-      const filled = fillFromVisitingCard(result.data || {});
-      if (filled.length) {
-        const prefix = window.WTT_I18N.t('scan_success');
-        setScanResult(`${prefix} ${filled.join(', ')}`, 'success');
-        showSnackbar(window.WTT_I18N.t('scan_success_snackbar'), 'green', 3000);
-      } else {
-        setScanResult(window.WTT_I18N.t('scan_no_details'), 'warning');
-      }
+      if (!navigator.onLine) throw new Error('Internet connection is required for visiting-card scanning.');
+      const form = new FormData();
+      form.append('card', file, file.name || 'visiting-card.jpg');
+      const response = await fetch('/api/scan-visiting-card', {method:'POST', body:form});
+      const result = await response.json().catch(()=>({}));
+      if (!response.ok || !result.success) throw new Error(result.error || 'Could not read visiting card.');
+      const filled = fillCard(result.data || {});
+      const addressNote = result.data?.address ? ` Card address read: ${result.data.address}. Plant/Project Location is intentionally left for verification.` : '';
+      setScanResult(
+        filled.length ? `Auto-filled: ${filled.join(', ')}.${addressNote}` : 'Card scanned, but no contact details were read confidently.',
+        filled.length ? 'success' : 'warning'
+      );
     } catch (error) {
-      console.warn('Visiting card scan failed:', error);
-      setScanResult(error.message || window.WTT_I18N.t('scan_failed'), 'error');
-      showSnackbar(error.message || window.WTT_I18N.t('scan_failed'), 'red', 3500);
+      setScanResult(error.message || 'Could not scan visiting card.', 'error');
+      showSnackbar(error.message || 'Could not scan visiting card.', 'red');
     } finally {
       setScanBusy(false);
-      byId('visitingCardInput').value = '';
+      $('visitingCardInput').value = '';
     }
   }
 
-  function setError(field, keyOrText='') {
-    const input = byId(field); const holder = document.querySelector(`[data-error-for="${field}"]`);
-    if (input) input.classList.toggle('invalid', !!keyOrText);
-    if (holder) holder.textContent = keyOrText ? (window.WTT_I18N.t(keyOrText) || keyOrText) : '';
-  }
-  function clearErrors() { document.querySelectorAll('.error-text').forEach(x => x.textContent=''); document.querySelectorAll('.invalid').forEach(x => x.classList.remove('invalid')); }
-  function updateConditionalFields() {
-    const other = byId('soil_type').value === 'others';
-    byId('otherSoilWrap').classList.toggle('hidden', !other); if (!other) { byId('other_soil_type').value=''; setError('other_soil_type'); }
-    const advance = byId('advance_received').checked;
-    byId('advanceAmountWrap').classList.toggle('hidden', !advance); if (!advance) { byId('advance_amount').value=''; setError('advance_amount'); }
-  }
-  function validate() {
-    clearErrors(); let ok = true;
-    const required = [['name','name_required'],['mobile_number','mobile_required'],['address','address_required'],['water_requirement','water_required'],['water_source','source_required'],['crops','crops_required'],['acres_of_land','acres_required'],['water_parameters','water_params_required']];
-    required.forEach(([f,k]) => { if (!byId(f).value.trim()) { setError(f,k); ok=false; } });
-    const mobile = byId('mobile_number').value.replace(/\D/g,''); if (byId('mobile_number').value.trim() && mobile.length < 10) { setError('mobile_number','mobile_valid'); ok=false; }
-    [['water_requirement','water_valid'],['acres_of_land','acres_valid']].forEach(([f,k]) => { const v=byId(f).value.trim(); if (v && !Number.isFinite(Number(v))) { setError(f,k); ok=false; } });
-    if (!byId('soil_type').value) { setError('soil_type','soil_required'); ok=false; }
-    if (byId('soil_type').value === 'others' && !byId('other_soil_type').value.trim()) { setError('other_soil_type','soil_other_required'); ok=false; }
-    if (byId('advance_received').checked) { const v=byId('advance_amount').value.trim(); if (!v) { setError('advance_amount','advance_required'); ok=false; } else if (!Number.isFinite(Number(v))) { setError('advance_amount','advance_valid'); ok=false; } }
-    return ok;
-  }
-  function payload() {
-    const soilKey = byId('soil_type').value;
-    return {
-      client_submission_id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
-      name: byId('name').value.trim(), mobile_number: byId('mobile_number').value.trim(), address: byId('address').value.trim(),
-      water_requirement: byId('water_requirement').value.trim(), water_source: byId('water_source').value.trim(), crops: byId('crops').value.trim(), acres_of_land: byId('acres_of_land').value.trim(),
-      soil_type_key: soilKey, soil_type: window.WTT_I18N.t(soilKey), other_soil_type: soilKey==='others' ? byId('other_soil_type').value.trim() : '',
-      water_parameters: byId('water_parameters').value.trim(), advance_received: byId('advance_received').checked, advance_amount: byId('advance_received').checked ? byId('advance_amount').value.trim() : '',
-      created_at: new Date().toISOString()
-    };
-  }
-  function resetForm() { byId('agricultureForm').reset(); byId('soil_type').value='clay'; updateConditionalFields(); clearErrors(); setScanResult(''); byId('scanPreviewWrap')?.classList.add('hidden'); if (scanObjectUrl) { URL.revokeObjectURL(scanObjectUrl); scanObjectUrl=null; } }
-  function setBusy(busy) { byId('submitButton').disabled=busy; byId('submitSpinner').classList.toggle('hidden',!busy); byId('submitLabel').classList.toggle('hidden',busy); }
-  async function submit(event) {
-    event.preventDefault(); if (!validate()) return;
-    const data = payload(); setBusy(true);
-    try {
-      if (!navigator.onLine) { window.WTT_QUEUE.add(data); showSnackbar(window.WTT_I18N.t('data_saved_offline'),'blue'); resetForm(); return; }
-      const response = await fetch('/api/submit', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
-      if (!response.ok) { const err=await response.json().catch(()=>({})); throw new Error((err.errors||[response.statusText]).join(', ')); }
-      const result = await response.json();
-      if (result.fully_synced) showSnackbar(window.WTT_I18N.t('data_sent'),'green'); else showSnackbar(window.WTT_I18N.t('data_saved_retry'),'orange');
-      if (result.whatsapp_english || result.whatsapp_tamil) setTimeout(() => showSnackbar('✅ Confirmation messages sent via WhatsApp!','green',3000), 900);
-      else setTimeout(() => showSnackbar('⚠️ WhatsApp messages could not be sent','orange',3000), 900);
-      resetForm();
-    } catch (e) {
-      window.WTT_QUEUE.add(data); showSnackbar(window.WTT_I18N.t(navigator.onLine ? 'data_saved_retry' : 'data_saved_offline'), navigator.onLine ? 'orange' : 'blue'); resetForm();
-      console.warn(e);
-    } finally { setBusy(false); }
-  }
   document.addEventListener('DOMContentLoaded', () => {
-    byId('soil_type').addEventListener('change', updateConditionalFields); byId('advance_received').addEventListener('change', updateConditionalFields); byId('agricultureForm').addEventListener('submit',submit); byId('scanCardButton')?.addEventListener('click', openCardPicker); byId('scanAgainButton')?.addEventListener('click', openCardPicker); byId('visitingCardInput')?.addEventListener('change', event => scanVisitingCard(event.target.files?.[0])); updateConditionalFields();
+    const hiddenAddress = document.createElement('input');
+    hiddenAddress.type = 'hidden';
+    hiddenAddress.id = 'visiting_card_address';
+    hiddenAddress.name = 'visiting_card_address';
+    $('leadForm').appendChild(hiddenAddress);
+
+    makeCheckboxes($('stpTreatedUseOptions'), 'stp_treated_water_use', ['Discharge','Gardening','Toilet Flushing','Reuse','Other']);
+    makeCheckboxes($('wtpApplicationOptions'), 'wtp_application_choice', ['Process','Drinking','Boiler','Cooling','RO / DM / DI','Other']);
+
+    $('treatment_required').addEventListener('change', updateTreatment);
+    $('industry_application').addEventListener('change', updateIndustry);
+    $('requirement_type').addEventListener('change', updateExistingPlant);
+    $('leadForm').addEventListener('submit', submitLead);
+    $('scanCardButton').addEventListener('click', () => $('visitingCardInput').click());
+    $('scanAgainButton').addEventListener('click', () => $('visitingCardInput').click());
+    $('visitingCardInput').addEventListener('change', event => scanCard(event.target.files?.[0]));
+
+    updateTreatment();
+    updateExistingPlant();
+    renumberSections();
   });
 })();

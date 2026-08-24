@@ -1,11 +1,11 @@
 {
-  "name": "WTT Agri Intex",
-  "short_name": "WTT Agri",
+  "name": "WTT Exhibition Lead Tracker",
+  "short_name": "WTT Leads",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#2e7d32",
+  "theme_color": "#0b6b4f",
   "icons": [
-    {"src": "/static/images/logo.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any maskable"}
+    {"src": "/static/images/logo.png", "sizes": "192x192", "type": "image/png"}
   ]
 }

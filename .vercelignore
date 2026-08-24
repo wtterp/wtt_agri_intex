@@ -1,16 +1,8 @@
 .env
-.env.local
-.env.*.local
-.git/
 instance/
 *.db
 *.db-wal
 *.db-shm
-*.sqlite
-*.sqlite3
 __pycache__/
-*.pyc
 .venv/
 venv/
-tests/
-*.log
