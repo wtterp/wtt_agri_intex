@@ -1,0 +1,7 @@
+English <-> Spanish language switching fix
+
+The language system now stores the original English source text on each UI element
+and always translates from that source. This prevents the UI from getting stuck in
+Spanish when switching back to English without refreshing the page.
+
+No spreadsheet, WhatsApp, email, OpenAI, or form submission behavior was changed.

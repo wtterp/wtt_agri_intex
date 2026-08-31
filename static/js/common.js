@@ -5,7 +5,7 @@
     const el = document.getElementById('snackbar');
     if (!el) return;
     clearTimeout(timer);
-    el.textContent = message;
+    el.textContent = window.WTT_I18N ? window.WTT_I18N.t(message) : message;
     el.className = `snackbar ${color} show`;
     timer = setTimeout(() => { el.className = 'snackbar'; }, duration);
   };

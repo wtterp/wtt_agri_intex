@@ -1,5 +1,8 @@
 (() => {
   const $ = id => document.getElementById(id);
+  const valueOf = (id) => { const el = $(id); return el ? String(el.value ?? '') : ''; };
+  const trimmedValueOf = (id) => valueOf(id).trim();
+  const fileOf = (id) => { const el = $(id); return el && el.files && el.files.length ? el.files[0] : null; };
   let scanObjectUrl = null;
   let visitingCardFile = null;
   const makeSubmissionId = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
@@ -40,7 +43,7 @@
     const input = $(field);
     const holder = document.querySelector(`[data-error-for="${field}"]`);
     if (input) input.classList.toggle('invalid', Boolean(message));
-    if (holder) holder.textContent = message;
+    if (holder) holder.textContent = window.WTT_I18N ? window.WTT_I18N.t(message) : message;
   }
 
   function clearErrors() {
@@ -99,19 +102,21 @@
     renderIndustrySpecific();
     makeCheckboxes($('treatedDestinationOptions'), 'treated_water_destination', dischargeOptions[treatment] || []);
     renumberSections();
+    window.WTT_I18N?.translatePage();
   }
 
   function updateIndustry() {
-    const industry = $('industry_application').value;
+    const industry = valueOf('industry_application');
     $('otherIndustryWrap').classList.toggle('hidden', industry !== 'Other');
     if (industry !== 'Other') $('other_industry_application').value = '';
     renderIndustrySpecific();
     renumberSections();
+    window.WTT_I18N?.translatePage();
   }
 
   function renderIndustrySpecific() {
     const treatment = $('treatment_required').value;
-    const industry = $('industry_application').value;
+    const industry = valueOf('industry_application');
     const section = $('industrySpecificSection');
     const target = $('industrySpecificFields');
     target.innerHTML = '';
@@ -216,57 +221,57 @@
     return {
       client_submission_id: currentSubmissionId,
       created_at: new Date().toISOString(),
-      company_name: $('company_name').value.trim(),
-      contact_person: $('contact_person').value.trim(),
-      designation: $('designation').value.trim(),
-      mobile_number: $('mobile_number').value.trim(),
-      email: $('email').value.trim(),
-      visiting_card_address: $('visiting_card_address')?.value || '',
+      company_name: trimmedValueOf('company_name'),
+      contact_person: trimmedValueOf('contact_person'),
+      designation: trimmedValueOf('designation'),
+      mobile_number: trimmedValueOf('mobile_number'),
+      email: trimmedValueOf('email'),
+      visiting_card_address: valueOf('visiting_card_address'),
       visiting_card_file_name: visitingCardFile?.name || '',
       visiting_card_url: '',
-      plant_project_location: $('plant_project_location').value.trim(),
-      treatment_required: $('treatment_required').value,
-      requirement_type: $('requirement_type').value,
+      plant_project_location: trimmedValueOf('plant_project_location'),
+      treatment_required: valueOf('treatment_required'),
+      requirement_type: valueOf('requirement_type'),
       industry_application: industry,
-      other_industry_application: $('other_industry_application').value.trim(),
-      customer_requirement: $('customer_requirement').value.trim(),
-      process_application: $('process_application').value.trim(),
-      required_capacity_kld: $('required_capacity_kld').value.trim(),
-      average_flow_kld: $('average_flow_kld').value.trim(),
-      peak_flow_kld: $('peak_flow_kld').value.trim(),
-      peak_requirement_kld: $('peak_requirement_kld').value.trim(),
-      population_occupancy: $('population_occupancy').value.trim(),
-      production_capacity: $('production_capacity').value.trim(),
-      production_capacity_unit: $('production_capacity_unit').value,
-      water_effluent_parameters: $('water_effluent_parameters').value.trim(),
-      analysis_report_status: $('analysis_report_status').value,
-      lab_report_file_name: $('lab_report_file').files?.[0]?.name || '',
+      other_industry_application: trimmedValueOf('other_industry_application'),
+      customer_requirement: trimmedValueOf('customer_requirement'),
+      process_application: trimmedValueOf('process_application'),
+      required_capacity_kld: trimmedValueOf('required_capacity_kld'),
+      average_flow_kld: trimmedValueOf('average_flow_kld'),
+      peak_flow_kld: trimmedValueOf('peak_flow_kld'),
+      peak_requirement_kld: trimmedValueOf('peak_requirement_kld'),
+      population_occupancy: trimmedValueOf('population_occupancy'),
+      production_capacity: trimmedValueOf('production_capacity'),
+      production_capacity_unit: valueOf('production_capacity_unit'),
+      water_effluent_parameters: trimmedValueOf('water_effluent_parameters'),
+      analysis_report_status: valueOf('analysis_report_status'),
+      lab_report_file_name: fileOf('lab_report_file')?.name || '',
       lab_report_url: '',
-      existing_plant_capacity_kld: $('existing_plant_capacity_kld').value.trim(),
-      existing_technology_process: $('existing_technology_process').value.trim(),
-      existing_plant_status: $('existing_plant_status').value,
-      existing_main_problem: $('existing_main_problem').value,
-      existing_plant_remarks: $('existing_plant_remarks').value.trim(),
+      existing_plant_capacity_kld: trimmedValueOf('existing_plant_capacity_kld'),
+      existing_technology_process: trimmedValueOf('existing_technology_process'),
+      existing_plant_status: valueOf('existing_plant_status'),
+      existing_main_problem: valueOf('existing_main_problem'),
+      existing_plant_remarks: trimmedValueOf('existing_plant_remarks'),
       treated_water_destination: selectedValues('treated_water_destination'),
-      specific_outlet_requirement: $('specific_outlet_requirement').value,
-      required_norms_outlet_quality: $('required_norms_outlet_quality').value.trim(),
+      specific_outlet_requirement: valueOf('specific_outlet_requirement'),
+      required_norms_outlet_quality: trimmedValueOf('required_norms_outlet_quality'),
       industry_specific_process: getIndustryProcess(),
-      industry_specific_capacity: $('industry_specific_capacity')?.value?.trim() || '',
-      industry_specific_capacity_unit: $('industry_specific_capacity_unit')?.value?.trim() || '',
+      industry_specific_capacity: trimmedValueOf('industry_specific_capacity'),
+      industry_specific_capacity_unit: trimmedValueOf('industry_specific_capacity_unit'),
       industry_specific_question: industryDef.question || '',
-      industry_specific_answer: $('industry_specific_answer')?.value || '',
+      industry_specific_answer: valueOf('industry_specific_answer'),
       major_wastewater_source: selectedValues('major_wastewater_source_choice'),
-      stp_sewage_source: $('stp_sewage_source').value.trim(),
-      stp_population_occupancy: $('stp_population_occupancy').value.trim(),
-      stp_required_capacity_kld: $('stp_required_capacity_kld').value.trim(),
+      stp_sewage_source: trimmedValueOf('stp_sewage_source'),
+      stp_population_occupancy: trimmedValueOf('stp_population_occupancy'),
+      stp_required_capacity_kld: trimmedValueOf('stp_required_capacity_kld'),
       stp_treated_water_use: selectedValues('stp_treated_water_use'),
-      wtp_raw_water_source: $('wtp_raw_water_source').value,
-      wtp_required_capacity_kld: $('wtp_required_capacity_kld').value.trim(),
+      wtp_raw_water_source: valueOf('wtp_raw_water_source'),
+      wtp_required_capacity_kld: trimmedValueOf('wtp_required_capacity_kld'),
       wtp_application: selectedValues('wtp_application_choice'),
-      wtp_raw_water_parameters: $('wtp_raw_water_parameters').value.trim(),
-      project_stage: $('project_stage').value,
-      expected_timeline: $('expected_timeline').value,
-      internal_remarks: $('internal_remarks').value.trim()
+      wtp_raw_water_parameters: trimmedValueOf('wtp_raw_water_parameters'),
+      project_stage: valueOf('project_stage'),
+      expected_timeline: valueOf('expected_timeline'),
+      internal_remarks: trimmedValueOf('internal_remarks')
     };
   }
 
@@ -313,7 +318,7 @@
       return;
     }
     const data = payload();
-    const labReportFile = $('lab_report_file').files?.[0] || null;
+    const labReportFile = fileOf('lab_report_file');
 
     // Binary attachments cannot be kept safely in localStorage. If a file is
     // selected, require internet so it reaches Google Drive before the row is
@@ -408,7 +413,7 @@
     if (scanObjectUrl) URL.revokeObjectURL(scanObjectUrl);
     scanObjectUrl = URL.createObjectURL(file);
     $('scanPreview').src = scanObjectUrl;
-    $('scanFileName').textContent = file.name || 'visiting-card.jpg';
+    $('scanFileName').textContent = file.name || (window.WTT_I18N ? window.WTT_I18N.t('visiting-card.jpg') : 'visiting-card.jpg');
     $('scanPreviewWrap').classList.remove('hidden');
   }
 
@@ -448,7 +453,7 @@
       const filled = fillCard(result.data || {});
       const addressNote = result.data?.address ? ` Card address read: ${result.data.address}. Plant/Project Location is intentionally left for verification.` : '';
       setScanResult(
-        filled.length ? `Auto-filled: ${filled.join(', ')}.${addressNote}` : 'Card scanned, but no contact details were read confidently.',
+        window.WTT_I18N ? window.WTT_I18N.t(filled.length ? `Auto-filled: ${filled.join(', ')}.${addressNote}` : 'Card scanned, but no contact details were read confidently.') : (filled.length ? `Auto-filled: ${filled.join(', ')}.${addressNote}` : 'Card scanned, but no contact details were read confidently.'),
         filled.length ? 'success' : 'warning'
       );
     } catch (error) {
@@ -481,5 +486,6 @@
     updateTreatment();
     updateExistingPlant();
     renumberSections();
+    window.WTT_I18N?.translatePage();
   });
 })();

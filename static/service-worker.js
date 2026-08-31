@@ -1,4 +1,4 @@
-const CACHE = 'wtt-exhibition-lead-v6';
+const CACHE = 'wtt-exhibition-lead-v7';
 const IS_LOCAL = self.location.hostname === '127.0.0.1' || self.location.hostname === 'localhost';
 const ASSETS = [
   '/',
@@ -6,6 +6,7 @@ const ASSETS = [
   '/sync-status',
   '/static/css/app.css',
   '/static/js/common.js',
+  '/static/js/language.js',
   '/static/js/offline-queue.js',
   '/static/js/add-data.js',
   '/static/js/sync-status.js',
