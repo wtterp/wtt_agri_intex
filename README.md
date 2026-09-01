@@ -230,3 +230,7 @@ The Google Sheet now tracks `Email Status`, `Email Detail`, and `Email Sent At` 
 ## Current compact form update
 
 The single Customer Details section now includes `Plant Capacity` directly below `Plant / Project Location`. The current Apps Script uses an exact compact header schema and `setupExhibitionSheet()` backs up an older wide `Exhibition Leads` sheet before migrating matching data into the new columns.
+
+## Live QR contact scanner
+
+The QR scanner now opens the rear camera directly and auto-detects QR contact data without a photo confirmation step. See `LIVE_QR_SCANNER.md`.

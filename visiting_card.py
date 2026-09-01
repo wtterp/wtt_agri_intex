@@ -165,3 +165,89 @@ If a field cannot be read confidently, return an empty string.
         email=_clean_text(extracted.get("email")),
         address=_clean_text(extracted.get("address")),
     )
+
+
+def scan_qr_contact(qr_text: str) -> VisitingCardData:
+    """Extract contact details from already-decoded QR text.
+
+    This is intentionally text-only so the live QR camera can close immediately
+    after detection and does not need to upload a photographed QR frame to OpenAI.
+    """
+    if not Config.OPENAI_API_KEY:
+        raise VisitingCardError("OPENAI_API_KEY is not configured on the server")
+
+    qr_hint = _clean_text(qr_text)
+    if not qr_hint:
+        raise VisitingCardError("No QR data was detected")
+
+    instructions = f"""
+Extract contact information from this decoded QR payload for a WTT exhibition enquiry.
+The payload may be a vCard, MECARD, mailto link, tel link, contact URL, plain text,
+or another contact-card format.
+Use only information explicitly supported by the QR payload. Never invent missing facts.
+Return exactly these string fields:
+- company_name: company / organization name
+- contact_person: person's full name
+- designation: person's job title / designation
+- mobile_number: best direct/mobile phone number
+- email: email address
+- address: business/postal address, city, district, or location
+If a field is not present, return an empty string.
+
+Decoded QR payload:
+{qr_hint}
+""".strip()
+
+    schema = {
+        "type": "object",
+        "properties": {key: {"type": "string"} for key in [
+            "company_name", "contact_person", "designation", "mobile_number", "email", "address"
+        ]},
+        "required": ["company_name", "contact_person", "designation", "mobile_number", "email", "address"],
+        "additionalProperties": False,
+    }
+    payload = {
+        "model": Config.OPENAI_VISION_MODEL,
+        "input": [{"role": "user", "content": [{"type": "input_text", "text": instructions}]}],
+        "reasoning": {"effort": "low"},
+        "text": {"format": {"type": "json_schema", "name": "exhibition_qr_contact", "strict": True, "schema": schema}},
+        "max_output_tokens": 400,
+    }
+
+    try:
+        response = requests.post(
+            "https://api.openai.com/v1/responses",
+            headers={"Authorization": f"Bearer {Config.OPENAI_API_KEY}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=Config.OPENAI_REQUEST_TIMEOUT,
+        )
+    except requests.RequestException as exc:
+        raise VisitingCardError("Could not reach OpenAI. Please check the internet connection") from exc
+
+    if not response.ok:
+        detail = ""
+        try:
+            detail = _clean_text((response.json().get("error") or {}).get("message"))
+        except Exception:
+            detail = _clean_text(response.text[:300])
+        if response.status_code == 401:
+            raise VisitingCardError("OpenAI API key is invalid or not authorized")
+        if response.status_code == 429:
+            raise VisitingCardError("OpenAI rate limit or quota reached. Please try again shortly")
+        raise VisitingCardError(detail or "OpenAI could not read the QR contact data")
+
+    try:
+        output_text = _extract_output_text(response.json())
+        extracted = _parse_json_object(output_text)
+    except Exception as exc:
+        log.warning("Could not parse QR contact response: %s", exc)
+        raise VisitingCardError("The QR contact data could not be interpreted") from exc
+
+    return VisitingCardData(
+        company_name=_clean_text(extracted.get("company_name")),
+        contact_person=_clean_text(extracted.get("contact_person")),
+        designation=_clean_text(extracted.get("designation")),
+        mobile_number=_clean_mobile(extracted.get("mobile_number")),
+        email=_clean_text(extracted.get("email")),
+        address=_clean_text(extracted.get("address")),
+    )

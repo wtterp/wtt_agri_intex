@@ -3,6 +3,11 @@
   let scanObjectUrl = null;
   let visitingCardFile = null;
   let qrMode = false;
+  let qrStream = null;
+  let qrAnimationFrame = 0;
+  let qrScanLocked = false;
+  let qrDetector = null;
+  let qrLastFrameAt = 0;
   const makeSubmissionId = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
   let currentSubmissionId = makeSubmissionId();
 
@@ -12,7 +17,8 @@
       customer_details: 'Customer Details', customer_details_help: 'Capture the visiting card or enter the contact information.',
       visiting_card: 'VISITING CARD', visiting_card_help: 'Take a photo or attach a card. AI fills contact details; the card image is stored in Google Drive when the lead is submitted.',
       scan_card: 'Take Photo / Attach Visiting Card', verify_details: 'Verify the extracted details before submitting',
-      scan_qr: 'Scan QR Code', scan_qr_help: 'AI reads the QR/contact details and fills the form', scan_again: 'Scan Again', reading_card: 'Reading visiting card / QR...',
+      scan_qr: 'Scan QR Code', scan_qr_help: 'Open the camera and scan automatically like a payment QR scanner', scan_again: 'Scan Again', reading_card: 'Reading visiting card / QR...',
+      qr_camera_title: 'Scan QR Code', qr_camera_help: 'Point the rear camera at the QR code. It will scan automatically.', qr_camera_waiting: 'Looking for QR code…', qr_camera_detected: 'QR detected. Filling contact details…', qr_camera_error: 'Camera could not start. Allow camera permission and try again.', qr_local_filled: 'QR details filled instantly.', qr_ai_enriched: 'AI completed additional QR contact details.',
       company_name_required: 'Company Name *', contact_person_required: 'Contact Person *', designation: 'Designation', mobile_no: 'Mobile No.', email: 'Email',
       contact_note: '* Enter at least one contact method: Mobile No. or Email.', plant_location: 'Plant / Project Location', plant_location_placeholder: 'Actual treatment-plant location', plant_capacity: 'Plant Capacity', plant_capacity_placeholder: 'e.g. 500 KLD',
       requirement_type_required: 'Requirement Type *', product_list: 'Product List', product_list_placeholder: 'e.g. RO 90', remarks: 'Remarks', remarks_placeholder: 'Enter remarks',
@@ -32,7 +38,8 @@
       customer_details: 'Datos del cliente', customer_details_help: 'Capture la tarjeta de visita o introduzca los datos de contacto.',
       visiting_card: 'TARJETA DE VISITA', visiting_card_help: 'Tome una foto o adjunte una tarjeta. La IA completa los datos de contacto; la imagen se guarda en Google Drive al enviar la consulta.',
       scan_card: 'Tomar foto / Adjuntar tarjeta', verify_details: 'Verifique los datos extraídos antes de enviar',
-      scan_qr: 'Escanear código QR', scan_qr_help: 'La IA lee los datos del QR/contacto y completa el formulario', scan_again: 'Escanear de nuevo', reading_card: 'Leyendo tarjeta / QR...',
+      scan_qr: 'Escanear código QR', scan_qr_help: 'Abra la cámara y escanee automáticamente como un lector de pagos', scan_again: 'Escanear de nuevo', reading_card: 'Leyendo tarjeta / QR...',
+      qr_camera_title: 'Escanear código QR', qr_camera_help: 'Apunte la cámara trasera al código QR. Se escaneará automáticamente.', qr_camera_waiting: 'Buscando código QR…', qr_camera_detected: 'QR detectado. Completando los datos de contacto…', qr_camera_error: 'No se pudo iniciar la cámara. Permita el acceso a la cámara e inténtelo de nuevo.', qr_local_filled: 'Datos del QR completados al instante.', qr_ai_enriched: 'La IA completó datos de contacto adicionales del QR.',
       company_name_required: 'Nombre de la empresa *', contact_person_required: 'Persona de contacto *', designation: 'Cargo', mobile_no: 'N.º de móvil', email: 'Correo electrónico',
       contact_note: '* Introduzca al menos un método de contacto: móvil o correo electrónico.', plant_location: 'Ubicación de la planta / proyecto', plant_location_placeholder: 'Ubicación real de la planta de tratamiento', plant_capacity: 'Capacidad de la planta', plant_capacity_placeholder: 'p. ej. 500 KLD',
       requirement_type_required: 'Tipo de requisito *', product_list: 'Lista de productos', product_list_placeholder: 'p. ej. RO 90', remarks: 'Observaciones', remarks_placeholder: 'Introduzca observaciones',
@@ -138,19 +145,291 @@
     });
   }
 
-  function fillCard(data) {
+  function cleanQrValue(value) {
+    return String(value || '')
+      .replace(/\\n/gi, ' ')
+      .replace(/\\,/g, ',')
+      .replace(/\\;/g, ';')
+      .replace(/\\:/g, ':')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function firstNonEmpty(...values) {
+    return values.map(cleanQrValue).find(Boolean) || '';
+  }
+
+  function parseVCardName(value) {
+    const parts = String(value || '').split(';').map(cleanQrValue);
+    const family = parts[0] || '';
+    const given = parts[1] || '';
+    const additional = parts[2] || '';
+    const prefix = parts[3] || '';
+    const suffix = parts[4] || '';
+    return [prefix, given, additional, family, suffix].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function parseQrLocally(rawText) {
+    const raw = String(rawText || '').trim();
+    const data = { company_name: '', contact_person: '', designation: '', mobile_number: '', email: '', address: '' };
+    if (!raw) return data;
+
+    const upper = raw.toUpperCase();
+    if (upper.includes('BEGIN:VCARD')) {
+      const unfolded = raw.replace(/\r?\n[ \t]/g, '');
+      const lines = unfolded.split(/\r?\n/);
+      lines.forEach(line => {
+        const colon = line.indexOf(':');
+        if (colon < 0) return;
+        const left = line.slice(0, colon);
+        const value = cleanQrValue(line.slice(colon + 1));
+        const key = left.split(';')[0].toUpperCase();
+        if (!value) return;
+        if (key === 'FN' && !data.contact_person) data.contact_person = value;
+        else if (key === 'N' && !data.contact_person) data.contact_person = parseVCardName(line.slice(colon + 1));
+        else if (key === 'ORG' && !data.company_name) data.company_name = value.replace(/;/g, ' - ');
+        else if (key === 'TITLE' && !data.designation) data.designation = value;
+        else if (key === 'TEL' && !data.mobile_number) data.mobile_number = value.replace(/^tel:/i, '');
+        else if (key === 'EMAIL' && !data.email) data.email = value.replace(/^mailto:/i, '');
+        else if ((key === 'ADR' || key === 'LABEL') && !data.address) {
+          data.address = key === 'ADR'
+            ? line.slice(colon + 1).split(';').map(cleanQrValue).filter(Boolean).join(', ')
+            : value;
+        }
+      });
+    } else if (upper.startsWith('MECARD:')) {
+      const body = raw.slice(7).replace(/;;\s*$/, '');
+      body.split(';').forEach(part => {
+        const colon = part.indexOf(':');
+        if (colon < 0) return;
+        const key = part.slice(0, colon).trim().toUpperCase();
+        const value = cleanQrValue(part.slice(colon + 1));
+        if (key === 'N' && !data.contact_person) {
+          const names = value.split(',').map(v => v.trim()).filter(Boolean);
+          data.contact_person = names.length > 1 ? `${names.slice(1).join(' ')} ${names[0]}`.trim() : value;
+        } else if ((key === 'ORG' || key === 'COMPANY') && !data.company_name) data.company_name = value;
+        else if ((key === 'TITLE' || key === 'ROLE') && !data.designation) data.designation = value;
+        else if ((key === 'TEL' || key === 'PHONE' || key === 'MOBILE') && !data.mobile_number) data.mobile_number = value;
+        else if (key === 'EMAIL' && !data.email) data.email = value;
+        else if ((key === 'ADR' || key === 'ADDRESS') && !data.address) data.address = value;
+      });
+    }
+
+    if (!data.email) {
+      const mailto = raw.match(/mailto:([^?\s]+)/i);
+      const emailMatch = raw.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+      data.email = cleanQrValue(mailto?.[1] || emailMatch?.[0] || '');
+    }
+    if (!data.mobile_number) {
+      const tel = raw.match(/tel:(\+?[\d\s().-]{7,})/i);
+      if (tel) data.mobile_number = cleanQrValue(tel[1]);
+    }
+
+    try {
+      const url = new URL(raw);
+      const get = (...names) => {
+        for (const name of names) {
+          const value = url.searchParams.get(name);
+          if (value) return cleanQrValue(value);
+        }
+        return '';
+      };
+      data.contact_person = firstNonEmpty(data.contact_person, get('name', 'full_name', 'fullname', 'contact', 'contact_person', 'fn'));
+      data.company_name = firstNonEmpty(data.company_name, get('company', 'company_name', 'org', 'organization', 'organisation'));
+      data.designation = firstNonEmpty(data.designation, get('designation', 'title', 'job_title', 'role'));
+      data.mobile_number = firstNonEmpty(data.mobile_number, get('mobile', 'phone', 'tel', 'telephone'));
+      data.email = firstNonEmpty(data.email, get('email', 'mail'));
+      data.address = firstNonEmpty(data.address, get('address', 'addr', 'location', 'city'));
+    } catch (_) {}
+
+    return data;
+  }
+
+  function setQrCameraStatus(message, kind = '') {
+    const el = $('qrCameraStatus');
+    if (!el) return;
+    el.textContent = message || '';
+    el.classList.toggle('success', kind === 'success');
+    el.classList.toggle('error', kind === 'error');
+  }
+
+  function stopQrScanner() {
+    if (qrAnimationFrame) cancelAnimationFrame(qrAnimationFrame);
+    qrAnimationFrame = 0;
+    if (qrStream) {
+      qrStream.getTracks().forEach(track => track.stop());
+      qrStream = null;
+    }
+    const video = $('qrVideo');
+    if (video) video.srcObject = null;
+    const modal = $('qrScannerModal');
+    if (modal) modal.classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+
+  async function startQrScanner() {
+    qrMode = true;
+    qrScanLocked = false;
+    qrLastFrameAt = 0;
+    setScanResult('');
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setScanResult(t('qr_camera_error'), 'error');
+      showSnackbar(t('qr_camera_error'), 'red');
+      return;
+    }
+
+    const modal = $('qrScannerModal');
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    setQrCameraStatus(t('qr_camera_waiting'));
+
+    try {
+      qrStream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      });
+      const video = $('qrVideo');
+      video.srcObject = qrStream;
+      await video.play();
+
+      qrDetector = null;
+      if ('BarcodeDetector' in window) {
+        try {
+          const formats = typeof BarcodeDetector.getSupportedFormats === 'function'
+            ? await BarcodeDetector.getSupportedFormats()
+            : ['qr_code'];
+          if (formats.includes('qr_code')) qrDetector = new BarcodeDetector({ formats: ['qr_code'] });
+        } catch (_) { qrDetector = null; }
+      }
+
+      qrAnimationFrame = requestAnimationFrame(scanLiveQrFrame);
+    } catch (error) {
+      setQrCameraStatus(t('qr_camera_error'), 'error');
+      setScanResult(t('qr_camera_error'), 'error');
+      showSnackbar(t('qr_camera_error'), 'red');
+    }
+  }
+
+  async function scanLiveQrFrame(timestamp) {
+    if (qrScanLocked || !$('qrScannerModal') || $('qrScannerModal').classList.contains('hidden')) return;
+    if (timestamp - qrLastFrameAt < 90) {
+      qrAnimationFrame = requestAnimationFrame(scanLiveQrFrame);
+      return;
+    }
+    qrLastFrameAt = timestamp;
+
+    const video = $('qrVideo');
+    if (!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) {
+      qrAnimationFrame = requestAnimationFrame(scanLiveQrFrame);
+      return;
+    }
+
+    let qrText = '';
+    try {
+      if (qrDetector) {
+        const results = await qrDetector.detect(video);
+        qrText = String(results?.[0]?.rawValue || '').trim();
+      } else if (window.jsQR) {
+        const canvas = $('qrCanvas');
+        const maxWidth = 720;
+        const scale = Math.min(1, maxWidth / video.videoWidth);
+        canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+        canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const result = window.jsQR(image.data, image.width, image.height, { inversionAttempts: 'attemptBoth' });
+        qrText = String(result?.data || '').trim();
+      }
+    } catch (_) {}
+
+    if (qrText) {
+      await handleLiveQrDetected(qrText);
+      return;
+    }
+    qrAnimationFrame = requestAnimationFrame(scanLiveQrFrame);
+  }
+
+  async function enrichQrWithAi(qrText) {
+    if (!navigator.onLine) return [];
+    try {
+      const response = await fetch('/api/scan-qr-contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ qr_text: qrText })
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.success) return [];
+      return fillCard(result.data || {}, true);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  async function handleLiveQrDetected(qrText) {
+    if (qrScanLocked) return;
+    qrScanLocked = true;
+    setQrCameraStatus(t('qr_camera_detected'), 'success');
+
+    const localData = parseQrLocally(qrText);
+    const localFilled = fillCard(localData, false);
+    stopQrScanner();
+
+    if (localFilled.length) {
+      setScanResult(`${t('auto_filled')}: ${localFilled.join(', ')}. ${t('qr_local_filled')}`, 'success');
+    } else {
+      setScanResult(t('qr_camera_detected'), 'warning');
+    }
+
+    setScanBusy(true);
+    const aiFilled = await enrichQrWithAi(qrText);
+    setScanBusy(false);
+
+    const combined = [...new Set([...localFilled, ...aiFilled])];
+    if (combined.length) {
+      const extra = aiFilled.length ? ` ${t('qr_ai_enriched')}` : '';
+      setScanResult(`${t('auto_filled')}: ${combined.join(', ')}.${extra}`, 'success');
+      showSnackbar(`${t('auto_filled')}: ${combined.join(', ')}`, 'green', 3500);
+    } else {
+      setScanResult(t('no_details'), 'warning');
+      showSnackbar(t('no_details'), 'orange', 4500);
+    }
+  }
+
+  function fillCard(data, onlyEmpty = false) {
     const map = {
-      company_name: 'Company', contact_person: 'Contact Person', designation: 'Designation', mobile_number: 'Mobile', email: 'Email', plant_project_location: 'Plant / Project Location'
+      company_name: 'Company',
+      contact_person: 'Contact Person',
+      designation: 'Designation',
+      mobile_number: 'Mobile',
+      email: 'Email'
     };
     const filled = [];
     Object.entries(map).forEach(([key, label]) => {
-      if (data[key] && $(key)) {
-        $(key).value = data[key];
-        setError(key);
-        filled.push(label);
-      }
+      const input = $(key);
+      const value = String(data?.[key] || '').trim();
+      if (!input || !value || (onlyEmpty && String(input.value || '').trim())) return;
+      input.value = value;
+      setError(key);
+      filled.push(label);
     });
-    return filled;
+
+    const address = String(data?.address || data?.plant_project_location || '').trim();
+    if (address) {
+      const hiddenAddress = $('visiting_card_address');
+      if (hiddenAddress && (!onlyEmpty || !String(hiddenAddress.value || '').trim())) hiddenAddress.value = address;
+      const location = $('plant_project_location');
+      if (location && (!onlyEmpty || !String(location.value || '').trim()) && !String(location.value || '').trim()) {
+        location.value = address;
+        filled.push('Plant / Project Location');
+      }
+    }
+    return [...new Set(filled)];
   }
 
   async function scanContact(file, isQr) {
@@ -178,7 +457,6 @@
     } finally {
       setScanBusy(false);
       $('visitingCardInput').value = '';
-      $('qrInput').value = '';
     }
   }
 
@@ -191,6 +469,7 @@
       mobile_number: $('mobile_number').value.trim(),
       email: $('email').value.trim(),
       plant_project_location: $('plant_project_location').value.trim(),
+      visiting_card_address: $('visiting_card_address')?.value.trim() || '',
       plant_capacity: $('plant_capacity').value.trim(),
       requirement_type: $('requirement_type').value,
       product_list: $('product_list').value.trim(),
@@ -269,6 +548,8 @@
     currentSubmissionId = makeSubmissionId();
     visitingCardFile = null;
     qrMode = false;
+    if ($('visiting_card_address')) $('visiting_card_address').value = '';
+    stopQrScanner();
     clearErrors();
     setScanResult('');
     $('scanPreviewWrap').classList.add('hidden');
@@ -282,9 +563,12 @@
     if (languageSelect) languageSelect.addEventListener('change', () => { localStorage.setItem('wtt_language', languageSelect.value); applyLanguage(); });
     $('leadForm').addEventListener('submit', submitLead);
     $('scanCardButton').addEventListener('click', () => { qrMode = false; $('visitingCardInput').click(); });
-    $('scanQrButton').addEventListener('click', () => { qrMode = true; $('qrInput').click(); });
-    $('scanAgainButton').addEventListener('click', () => (qrMode ? $('qrInput') : $('visitingCardInput')).click());
+    $('scanQrButton').addEventListener('click', startQrScanner);
+    $('scanAgainButton').addEventListener('click', () => qrMode ? startQrScanner() : $('visitingCardInput').click());
     $('visitingCardInput').addEventListener('change', event => scanContact(event.target.files?.[0], false));
-    $('qrInput').addEventListener('change', event => scanContact(event.target.files?.[0], true));
+    $('closeQrScanner').addEventListener('click', stopQrScanner);
+    $('qrScannerModal').addEventListener('click', event => { if (event.target === $('qrScannerModal')) stopQrScanner(); });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape' && !$('qrScannerModal').classList.contains('hidden')) stopQrScanner(); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) stopQrScanner(); });
   });
 })();

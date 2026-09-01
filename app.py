@@ -14,7 +14,7 @@ from models import ExhibitionLead
 from services import ServiceResult, update_email_status, upload_exhibition_file
 from sync_manager import submit_online, sync_pending_data
 from validation import validate_submission
-from visiting_card import VisitingCardError, scan_visiting_card
+from visiting_card import VisitingCardError, scan_qr_contact, scan_visiting_card
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger(__name__)
@@ -94,6 +94,23 @@ def create_app() -> Flask:
         except Exception:
             log.exception("Unexpected visiting-card scan error")
             return jsonify({"success": False, "error": "Could not scan the visiting card"}), 500
+        data = card.to_dict()
+        return jsonify({"success": True, "found": [k for k, v in data.items() if v], "data": data})
+
+    @app.post("/api/scan-qr-contact")
+    def scan_qr_contact_api():
+        payload = request.get_json(silent=True) or {}
+        qr_text = str(payload.get("qr_text") or "").strip()
+        if not qr_text:
+            return jsonify({"success": False, "error": "No QR data was detected"}), 400
+        try:
+            card = scan_qr_contact(qr_text)
+        except VisitingCardError as exc:
+            status = 503 if "OPENAI_API_KEY" in str(exc) else 400
+            return jsonify({"success": False, "error": str(exc)}), status
+        except Exception:
+            log.exception("Unexpected QR contact scan error")
+            return jsonify({"success": False, "error": "Could not read the QR contact data"}), 500
         data = card.to_dict()
         return jsonify({"success": True, "found": [k for k, v in data.items() if v], "data": data})
 

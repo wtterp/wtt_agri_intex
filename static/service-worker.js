@@ -1,4 +1,4 @@
-const CACHE = 'wtt-exhibition-lead-v7';
+const CACHE = 'wtt-exhibition-lead-v8-live-qr';
 const IS_LOCAL = self.location.hostname === '127.0.0.1' || self.location.hostname === 'localhost';
 const ASSETS = [
   '/',
