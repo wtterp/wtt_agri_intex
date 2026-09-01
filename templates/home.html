@@ -2,18 +2,16 @@
 {% block body_class %}home-page{% endblock %}
 {% block app %}
   {% set page_title='WTT Exhibition Lead Tracker' %}
-  {% set show_back=false %}
-  {% set show_sync_icon=true %}
-  {% set show_refresh_icon=false %}
+  {% set show_back=false %}{% set show_sync_icon=true %}{% set show_refresh_icon=false %}
   {% include '_header.html' %}
   <main class="home-main">
     <section class="home-content">
       <div class="logo-orbit"><img src="{{ url_for('static', filename='images/logo.png') }}" alt="WTT logo"></div>
-      <h1>Water & Wastewater Treatment</h1>
-      <p>Exhibition enquiry and lead capture for ETP, STP and WTP requirements.</p>
+      <h1 data-site-i18n="home_title">Water & Wastewater Treatment</h1>
+      <p data-site-i18n="home_desc">Exhibition enquiry and lead capture for WTT requirements.</p>
       <div class="home-actions">
-        <a class="btn btn-primary btn-large" href="/add"><span class="btn-icon">＋</span><span>New Exhibition Enquiry</span></a>
-        <a class="btn btn-outline btn-large" href="/sync-status"><span class="btn-icon">↻</span><span>View Sync Status</span></a>
+        <a class="btn btn-primary btn-large" href="/add"><span class="btn-icon">＋</span><span data-site-i18n="new_enquiry">New Exhibition Enquiry</span></a>
+        <a class="btn btn-outline btn-large" href="/sync-status"><span class="btn-icon">↻</span><span data-site-i18n="sync_status">View Sync Status</span></a>
       </div>
     </section>
   </main>

@@ -1,11 +1,15 @@
 <header class="topbar">
   <div class="topbar-left">
-    {% if show_back %}<a class="icon-btn back-btn" href="{{ back_href|default('/') }}" aria-label="Back">←</a>{% endif %}
+    {% if show_back %}<a class="icon-btn back-btn" href="{{ back_href|default('/') }}" aria-label="Back" data-i18n-aria="back">←</a>{% endif %}
     <img class="topbar-logo" src="{{ url_for('static', filename='images/logo.png') }}" alt="WTT logo">
-    <div class="topbar-title">{{ page_title }}</div>
+    <div class="topbar-title" data-i18n="page_title">{{ page_title }}</div>
   </div>
   <div class="topbar-actions">
-    <label class="language-picker" for="languageSelect"><span id="languageLabel">Language</span><select id="languageSelect" aria-label="Language"><option value="en">English</option><option value="es">Español</option></select></label>
+    <label class="language-label" for="languageSelect" data-i18n="language">Language</label>
+    <select id="languageSelect" class="language-select" aria-label="Language">
+      <option value="en">English</option>
+      <option value="es">Español</option>
+    </select>
     {% if show_sync_icon %}<a class="icon-btn" href="/sync-status" aria-label="Sync Status" title="Sync Status">↻</a>{% endif %}
     {% if show_refresh_icon %}<button id="refreshButton" class="icon-btn" type="button" aria-label="Refresh" title="Refresh">↻</button>{% endif %}
   </div>

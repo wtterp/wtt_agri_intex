@@ -6,7 +6,6 @@ const ASSETS = [
   '/sync-status',
   '/static/css/app.css',
   '/static/js/common.js',
-  '/static/js/language.js',
   '/static/js/offline-queue.js',
   '/static/js/add-data.js',
   '/static/js/sync-status.js',

@@ -77,7 +77,7 @@ def _parse_json_object(text: str) -> dict:
         raise
 
 
-def scan_visiting_card(image_bytes: bytes, mime_type: str) -> VisitingCardData:
+def scan_visiting_card(image_bytes: bytes, mime_type: str, qr_text: str = "") -> VisitingCardData:
     if not Config.OPENAI_API_KEY:
         raise VisitingCardError("OPENAI_API_KEY is not configured on the server")
     if mime_type not in SUPPORTED_IMAGE_TYPES:
@@ -88,17 +88,25 @@ def scan_visiting_card(image_bytes: bytes, mime_type: str) -> VisitingCardData:
         raise VisitingCardError(f"Image is too large. Maximum allowed size is {Config.OPENAI_MAX_IMAGE_MB} MB")
 
     data_url = f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('ascii')}"
-    instructions = """
-Extract contact information from this photographed business/visiting card for a WTT water and wastewater exhibition lead form.
-Use only text supported by the image. Never invent missing facts.
+    qr_hint = _clean_text(qr_text)
+    qr_section = ""
+    if qr_hint:
+        qr_section = f"\nA QR decoder also found this encoded text from the image. Treat it as supporting evidence and extract contact details from it when it is a vCard, MECARD, mailto, tel, URL, or contact record:\n{qr_hint}\n"
+
+    instructions = f"""
+Extract contact information from this photographed business/visiting card for a WTT exhibition enquiry.
+The image may contain a normal printed visiting card, a QR code, or both.
+Read printed text and use the QR information below when available.
+Use only information supported by the image or QR payload. Never invent missing facts.
 Return exactly these string fields:
 - company_name: printed company / organization name
 - contact_person: person's full name
 - designation: person's printed job title / designation
 - mobile_number: best direct/mobile phone number
-- email: printed email address
-- address: printed business/postal address or concise city/location if only that is available
+- email: printed or QR-provided email address
+- address: printed or QR-provided business/postal address, city, district, or location
 If a field cannot be read confidently, return an empty string.
+{qr_section}
 """.strip()
 
     schema = {
@@ -116,8 +124,8 @@ If a field cannot be read confidently, return an empty string.
             {"type": "input_image", "image_url": data_url, "detail": "original"},
         ]}],
         "reasoning": {"effort": "low"},
-        "text": {"format": {"type": "json_schema", "name": "exhibition_visiting_card", "strict": True, "schema": schema}},
-        "max_output_tokens": 400,
+        "text": {"format": {"type": "json_schema", "name": "exhibition_contact_scan", "strict": True, "schema": schema}},
+        "max_output_tokens": 500,
     }
 
     try:
@@ -140,14 +148,14 @@ If a field cannot be read confidently, return an empty string.
             raise VisitingCardError("OpenAI API key is invalid or not authorized")
         if response.status_code == 429:
             raise VisitingCardError("OpenAI rate limit or quota reached. Please try again shortly")
-        raise VisitingCardError(detail or "OpenAI could not scan this visiting card")
+        raise VisitingCardError(detail or "OpenAI could not scan this visiting card or QR code")
 
     try:
         output_text = _extract_output_text(response.json())
         extracted = _parse_json_object(output_text)
     except Exception as exc:
-        log.warning("Could not parse visiting-card response: %s", exc)
-        raise VisitingCardError("The visiting card could not be read clearly. Please try another photo") from exc
+        log.warning("Could not parse contact scan response: %s", exc)
+        raise VisitingCardError("The card/QR could not be read clearly. Please try another image") from exc
 
     return VisitingCardData(
         company_name=_clean_text(extracted.get("company_name")),

@@ -86,7 +86,8 @@ def create_app() -> Flask:
                 }
             ), 400
         try:
-            card = scan_visiting_card(image_bytes, mime_type)
+            qr_text = (request.form.get("qr_text") or "").strip()
+            card = scan_visiting_card(image_bytes, mime_type, qr_text=qr_text)
         except VisitingCardError as exc:
             status = 503 if "OPENAI_API_KEY" in str(exc) else 400
             return jsonify({"success": False, "error": str(exc)}), status

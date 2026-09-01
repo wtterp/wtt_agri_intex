@@ -16,35 +16,26 @@ class ExhibitionLeadTests(unittest.TestCase):
             "client_submission_id": "test-123",
             "company_name": "Example Industries",
             "contact_person": "A Person",
+            "designation": "Manager",
             "mobile_number": "9876543210",
             "email": "person@example.com",
-            "treatment_required": "ETP",
+            "plant_project_location": "Chennai",
+            "plant_capacity": "500 KLD",
             "requirement_type": "New Plant",
-            "industry_application": "Textile",
-            "required_capacity_kld": "300",
-            "customer_requirement": "Need a 300 KLD ETP",
-            "project_stage": "Initial Enquiry",
-            "expected_timeline": "1–3 Months",
-            "treated_water_destination": ["Reuse in Plant", "Gardening"],
+            "product_list": "RO 90, MBR 50",
+            "remarks": "Interested in quotation",
             "visiting_card_file_name": "card.jpg",
             "visiting_card_url": "https://drive.google.com/file/d/card/view",
-            "lab_report_file_name": "report.pdf",
-            "lab_report_url": "https://drive.google.com/file/d/report/view",
         }
 
     def test_validation_accepts_valid_lead(self):
         lead = ExhibitionLead.from_request(self.make_payload())
         self.assertEqual(validate_submission(lead), [])
 
-    def test_sections_four_onward_are_optional(self):
+    def test_product_list_and_remarks_are_optional(self):
         payload = self.make_payload()
-        for field in (
-            "customer_requirement",
-            "required_capacity_kld",
-            "project_stage",
-            "expected_timeline",
-        ):
-            payload[field] = ""
+        payload["product_list"] = ""
+        payload["remarks"] = ""
         errors = validate_submission(ExhibitionLead.from_request(payload))
         self.assertEqual(errors, [])
 
@@ -74,13 +65,16 @@ class ExhibitionLeadTests(unittest.TestCase):
         errors = validate_submission(ExhibitionLead.from_request(payload))
         self.assertTrue(any("Mobile" in e for e in errors))
 
-    def test_google_mapping_joins_lists_and_includes_drive_links(self):
+    def test_google_mapping_uses_current_four_form_fields_and_card_link(self):
         row = ExhibitionLead.from_request(self.make_payload()).to_google_json()
         self.assertEqual(row["Company Name"], "Example Industries")
-        self.assertEqual(row["Treated Water Destination / Use"], "Reuse in Plant; Gardening")
+        self.assertEqual(row["Plant Capacity"], "500 KLD")
+        self.assertEqual(row["Requirement Type"], "New Plant")
+        self.assertEqual(row["Product List"], "RO 90, MBR 50")
+        self.assertEqual(row["Remarks"], "Interested in quotation")
         self.assertEqual(row["Visiting Card Drive URL"], "https://drive.google.com/file/d/card/view")
-        self.assertEqual(row["Lab Report Drive URL"], "https://drive.google.com/file/d/report/view")
-        self.assertNotIn("Existing Treatment Plant", row)
+        self.assertNotIn("Treatment Required", row)
+        self.assertNotIn("Industry / Application", row)
 
     def test_pending_database_is_deduplicated(self):
         old = Config.DATABASE_PATH

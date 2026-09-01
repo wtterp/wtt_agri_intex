@@ -225,3 +225,8 @@ The default message can be edited in `buildWhatsappMessage()` inside `google_app
 This build sends a customer acknowledgement email after the lead has been safely saved to Google Sheets. Configure the Office 365 SMTP settings in `.env` / Vercel Environment Variables. See `EMAIL_SMTP_SETUP.md` for the exact values and Apps Script redeployment steps.
 
 The Google Sheet now tracks `Email Status`, `Email Detail`, and `Email Sent At` for each Submission ID. Email delivery is best-effort: an SMTP failure never deletes or rejects a lead already stored in Google Sheets.
+
+
+## Current compact form update
+
+The single Customer Details section now includes `Plant Capacity` directly below `Plant / Project Location`. The current Apps Script uses an exact compact header schema and `setupExhibitionSheet()` backs up an older wide `Exhibition Leads` sheet before migrating matching data into the new columns.

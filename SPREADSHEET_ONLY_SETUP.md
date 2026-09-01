@@ -25,3 +25,8 @@
    - WhatsApp Status = `Sent`
 
 No ERPNext DocType is required.
+
+
+## Current compact form update
+
+The single Customer Details section now includes `Plant Capacity` directly below `Plant / Project Location`. The current Apps Script uses an exact compact header schema and `setupExhibitionSheet()` backs up an older wide `Exhibition Leads` sheet before migrating matching data into the new columns.

@@ -25,12 +25,14 @@ def _email_body_html(data: ExhibitionLead) -> str:
     rows: list[str] = []
     for label, key in (
         ("Company", "company_name"),
-        ("Treatment", "treatment_required"),
+        ("Contact Person", "contact_person"),
+        ("Designation", "designation"),
+        ("Mobile No", "mobile_number"),
         ("Requirement", "requirement_type"),
-        ("Industry / Application", "industry_application"),
+        ("Product List", "product_list"),
         ("Project Location", "plant_project_location"),
-        ("Project Stage", "project_stage"),
-        ("Expected Timeline", "expected_timeline"),
+        ("Plant Capacity", "plant_capacity"),
+        ("Remarks", "remarks"),
     ):
         value = _display(p.get(key))
         if value:
@@ -75,12 +77,14 @@ def _email_body_text(data: ExhibitionLead) -> str:
     ]
     for label, key in (
         ("Company", "company_name"),
-        ("Treatment", "treatment_required"),
+        ("Contact Person", "contact_person"),
+        ("Designation", "designation"),
+        ("Mobile No", "mobile_number"),
         ("Requirement", "requirement_type"),
-        ("Industry / Application", "industry_application"),
+        ("Product List", "product_list"),
         ("Project Location", "plant_project_location"),
-        ("Project Stage", "project_stage"),
-        ("Expected Timeline", "expected_timeline"),
+        ("Plant Capacity", "plant_capacity"),
+        ("Remarks", "remarks"),
     ):
         value = _display(p.get(key))
         if value:
